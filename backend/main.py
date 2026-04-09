@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from typing import List, Optional, Any, Dict
 import io, csv
 import random
+import hashlib
 
 import httpx
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
@@ -17,7 +18,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from config import settings
 from data.loader import DataLoader
 from data.simulator import ShipmentSimulator
-from data.weather import get_global_weather_snapshot, get_weather_for_region
+from data.weather import (get_global_weather_snapshot, get_weather_for_region, get_weather_eta_adjustment,)
 from data.insights import generate_insights
 from ml.eta_model import ETAPredictor
 from ml.delay_model import DelayPredictor
@@ -90,6 +91,20 @@ async def lifespan(app: FastAPI):
         _bg_task.cancel()
     logger.info("Shutdown complete")
 
+class RouteStopInput(BaseModel):
+    id: str
+    name: str
+    lat: float
+    lon: float
+    priority: int
+    weight_kg: float
+
+class RouteRequest(BaseModel):
+    shipments: List[RouteStopInput]
+    num_vehicles: int
+    optimize_for: str = "balanced"
+    depot_lat: float
+    depot_lon: float
 
 app = FastAPI(title="LogiSense AI", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
@@ -132,6 +147,12 @@ async def optimize_routes_road(req: RouteRequest):
 
     return result
 
+def stable_order_value(shipment_id: str) -> float:
+    seed = int(hashlib.md5(shipment_id.encode()).hexdigest()[:8], 16)
+    rng = random.Random(seed)
+    return round(rng.uniform(500, 5000), 2)
+
+
 # ── Schemas ───────────────────────────────────────────────────────────────────
 class ShipmentInput(BaseModel):
     shipping_mode:           str   = "Standard Class"
@@ -166,12 +187,6 @@ class LocationInput(BaseModel):
     destination: Optional[str]   = None
     distance_km: Optional[float] = 50.0
 
-class RouteRequest(BaseModel):
-    shipments:    List[LocationInput]
-    num_vehicles: int   = Field(3, ge=1, le=10)
-    optimize_for: str   = "balanced"
-    depot_lat:    float = 40.7128
-    depot_lon:    float = -74.0060
 
 class AllocationRequest(BaseModel):
     shipments: List[Dict[str, Any]]
@@ -267,7 +282,6 @@ def predict_full(payload: ShipmentInput):
 
     # Apply live weather penalty if region is known
     try:
-        from data.weather import get_weather_for_region, get_weather_eta_adjustment
         region = d.get("order_region", "North America")
         w = get_weather_for_region(region)
         adj = get_weather_eta_adjustment(w["condition"], w["wind_kph"])
@@ -465,7 +479,7 @@ def revenue_at_risk():
     uvicorn.run("main:app", host=settings.HOST, port=settings.PORT, reload=True)
     for s in simulator.shipments:
         if s["status"] == "delayed":
-            order_value = round(random.uniform(500, 5000), 2)
+            order_value = stable_order_value(s["id"])
             delay_days = max(1, s["eta_hours"] // 24)
             sla_penalty_pct = min(0.20, delay_days * 0.05)
             penalty = round(order_value * sla_penalty_pct, 2)
