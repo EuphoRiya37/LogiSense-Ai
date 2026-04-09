@@ -1,17 +1,19 @@
 import { BrowserRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { LayoutDashboard, Brain, Route as RouteIcon, Radio, BarChart3, Package, Zap } from 'lucide-react'
+import { LayoutDashboard, Brain, Route as RouteIcon, Radio, BarChart3, Package, Zap, Truck } from 'lucide-react'
 import Dashboard from './pages/Dashboard'
 import Predictions from './pages/Predictions'
 import RouteOptimizer from './pages/RouteOptimizer'
 import LiveTracking from './pages/LiveTracking'
 import Analytics from './pages/Analytics'
+import FleetAllocation from './pages/FleetAllocation'
 
 const NAV = [
   { to: '/',           icon: LayoutDashboard, label: 'Dashboard'     },
   { to: '/predict',    icon: Brain,           label: 'Predictions'   },
   { to: '/routes',     icon: RouteIcon,       label: 'Route Optimizer'},
   { to: '/tracking',   icon: Radio,           label: 'Live Tracking' },
+  { to: '/fleet', icon: Truck, label: 'Fleet Allocation'},
   { to: '/analytics',  icon: BarChart3,       label: 'Analytics'     },
 ]
 
@@ -101,6 +103,7 @@ export default function App() {
         <main className="ml-60 flex-1 flex flex-col overflow-hidden">
           <PageWrapper>
             <Routes>
+              <Route path="/fleet" element={<FleetAllocation />} />
               <Route path="/"          element={<Dashboard />} />
               <Route path="/predict"   element={<Predictions />} />
               <Route path="/routes"    element={<RouteOptimizer />} />
