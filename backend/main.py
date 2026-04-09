@@ -794,12 +794,9 @@ async def get_weather(lat: float = 39.5, lon: float = -98.0):
             "delay_impact": "LOW",
             "error": str(e),
         }
-
-
 @app.get("/api/weather/global")
 def weather_global():
     return get_global_weather_snapshot()
-
 
 @app.get("/api/insights")
 def get_insights_route():
