@@ -449,11 +449,6 @@ async def geocode(q: str):
             ]
     except Exception as e:
         raise HTTPException(500, f"Geocoding failed: {e}")
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("main:app", host=settings.HOST, port=settings.PORT, reload=True)
-
 @app.post("/api/stress-test")
 def run_stress_test():
     if not simulator:
@@ -466,6 +461,8 @@ def revenue_at_risk():
         raise HTTPException(503, "Simulator not ready")
     at_risk = []
     total_risk = 0.0
+    if __name__ == "__main__":
+    uvicorn.run("main:app", host=settings.HOST, port=settings.PORT, reload=True)
     for s in simulator.shipments:
         if s["status"] == "delayed":
             order_value = round(random.uniform(500, 5000), 2)
