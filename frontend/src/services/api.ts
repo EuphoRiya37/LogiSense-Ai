@@ -32,6 +32,18 @@ export const optimizeRoutes = (payload: {
   depot_lon?: number;
 }): Promise<RouteResult> => api.post('/api/optimize/routes', payload).then(r => r.data);
 
+export const optimizeRoutesRoad = (payload: Parameters<typeof optimizeRoutes>[0]) =>
+  api.post('/api/optimize/routes/road', payload).then(r => r.data);
+
+export const geocode = (q: string) =>
+  api.get('/api/geocode', { params: { q } }).then(r => r.data);
+
+export const runStressTest = () =>
+  api.post('/api/stress-test').then(r => r.data);
+
+export const getRevenueAtRisk = () =>
+  api.get('/api/analytics/revenue-at-risk').then(r => r.data);
+
 export const allocateShipments = (shipments: unknown[]) =>
   api.post('/api/allocate', { shipments }).then(r => r.data);
 
