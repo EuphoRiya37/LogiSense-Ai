@@ -104,67 +104,69 @@ export default function RouteOptimizer() {
               {isPending ? <><Spinner size={15} color="#020510" /> Optimizing…</> : <><Zap size={14} /> Optimize Routes</>}
             </button>
             {/* GPS / Road routing toggle */}
-<div className="flex items-center justify-between mt-3 px-1">
-  <div>
-    <div className="text-xs font-semibold text-white">Road Routing Mode</div>
-    <div className="text-[10px] text-slate-500 font-mono">
-      {roadMode ? '🛣️ Following real roads (ORS)' : '📏 Straight-line distance'}
-    </div>
-  </div>
-  <button
-    onClick={() => setRoadMode(r => !r)}
-    className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${roadMode ? 'bg-cyan-500' : 'bg-slate-700'}`}>
-    <div className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform duration-200 ${roadMode ? 'translate-x-5' : ''}`} />
-  </button>
-</div>
+            <div className="flex items-center justify-between mt-3 px-1">
+              <div>
+                <div className="text-xs font-semibold text-white">Road Routing Mode</div>
+                <div className="text-[10px] text-slate-500 font-mono">
+                  {roadMode ? '🛣️ Following real roads (ORS)' : '📏 Straight-line distance'}
+                </div>
+              </div>
+              <button
+                onClick={() => setRoadMode(r => !r)}
+                className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${roadMode ? 'bg-cyan-500' : 'bg-slate-700'}`}>
+                <div className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform duration-200 ${roadMode ? 'translate-x-5' : ''}`} />
+              </button>
+            </div>
           </div>
-<div className="glass-card p-4">
-  <div className="text-xs font-semibold text-white mb-2 flex items-center gap-2">
-    <Search size={13} className="text-cyan-400" /> Search Address
-  </div>
-  <div className="flex gap-2">
-    <input
-      value={addressQuery}
-      onChange={e => setAddressQuery(e.target.value)}
-      onKeyDown={async e => {
-        if (e.key === 'Enter' && addressQuery.trim()) {
-          const res = await geocode(addressQuery)
-          setGeoResults(res)
-        }
-      }}
-      placeholder="e.g. Shibuya, Tokyo"
-      className="input-field flex-1 text-xs"
-    />
-    <button
-      className="btn-ghost text-xs px-3"
-      onClick={async () => {
-        const res = await geocode(addressQuery)
-        setGeoResults(res)
-      }}>
-      Go
-    </button>
-  </div>
-  {geoResults.length > 0 && (
-    <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
-      {geoResults.slice(0, 4).map((r, i) => (
-        <button key={i}
-          className="w-full text-left text-[10px] font-mono text-slate-400 hover:text-cyan-400 px-2 py-1 rounded glass-card truncate"
-          onClick={() => {
-            setStops(s => [...s, {
-              id: Math.random().toString(36).slice(2, 7),
-              lat: r.lat, lon: r.lon,
-              name: r.display_name.slice(0, 30),
-              priority: 2, weight_kg: 100,
-            }])
-            setGeoResults([])
-            setAddressQuery('')
-          }}>
-          + {r.display_name.slice(0, 60)}
-        </button>
-      ))}
-    </div>
-  )}
-</div>
+
+          <div className="glass-card p-4">
+            <div className="text-xs font-semibold text-white mb-2 flex items-center gap-2">
+              <Search size={13} className="text-cyan-400" /> Search Address
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={addressQuery}
+                onChange={e => setAddressQuery(e.target.value)}
+                onKeyDown={async e => {
+                  if (e.key === 'Enter' && addressQuery.trim()) {
+                    const res = await geocode(addressQuery)
+                    setGeoResults(res)
+                  }
+                }}
+                placeholder="e.g. Shibuya, Tokyo"
+                className="input-field flex-1 text-xs"
+              />
+              <button
+                className="btn-ghost text-xs px-3"
+                onClick={async () => {
+                  const res = await geocode(addressQuery)
+                  setGeoResults(res)
+                }}>
+                Go
+              </button>
+            </div>
+            {geoResults.length > 0 && (
+              <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
+                {geoResults.slice(0, 4).map((r, i) => (
+                  <button key={i}
+                    className="w-full text-left text-[10px] font-mono text-slate-400 hover:text-cyan-400 px-2 py-1 rounded glass-card truncate"
+                    onClick={() => {
+                      setStops(s => [...s, {
+                        id: Math.random().toString(36).slice(2, 7),
+                        lat: r.lat, lon: r.lon,
+                        name: r.display_name.slice(0, 30),
+                        priority: 2, weight_kg: 100,
+                      }])
+                      setGeoResults([])
+                      setAddressQuery('')
+                    }}>
+                    + {r.display_name.slice(0, 60)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Stops list */}
           <div className="glass-card p-5">
             <div className="flex items-center justify-between mb-4">
@@ -240,20 +242,20 @@ export default function RouteOptimizer() {
                   <div className="text-xl font-bold font-mono text-yellow-400">{result.savings.improvement_pct}%</div>
                 </div>
                 <div className="col-span-2 glass-card p-3 flex items-center gap-3 mt-1"
-  style={{ border: '1px solid rgba(0,255,135,0.2)' }}>
-  <span className="text-2xl">🌱</span>
-  <div>
-    <div className="stat-label">CO₂ Emissions Prevented</div>
-    <div className="text-xl font-bold font-mono text-neon-green">
-      {result.savings.co2_saved_kg > 0
-        ? `${result.savings.co2_saved_kg} kg`
-        : `${Math.abs(result.savings.co2_saved_kg)} kg extra`}
-    </div>
-    <div className="text-[10px] text-slate-500 font-mono">
-      Based on 1.02 kg CO₂/km diesel avg
-    </div>
-  </div>
-</div>
+                  style={{ border: '1px solid rgba(0,255,135,0.2)' }}>
+                  <span className="text-2xl">🌱</span>
+                  <div>
+                    <div className="stat-label">CO₂ Emissions Prevented</div>
+                    <div className="text-xl font-bold font-mono text-neon-green">
+                      {result.savings.co2_saved_kg > 0
+                        ? `${result.savings.co2_saved_kg} kg`
+                        : `${Math.abs(result.savings.co2_saved_kg)} kg extra`}
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-mono">
+                      Based on 1.02 kg CO₂/km diesel avg
+                    </div>
+                  </div>
+                </div>
               </div>
               <div className="text-[10px] font-mono text-slate-600 border-t border-white/5 pt-2">
                 Algorithm: {result.algorithm}
@@ -329,16 +331,19 @@ export default function RouteOptimizer() {
                 const pts: [number, number][] = route.stops.map(s => [s.lat, s.lon])
                 return (
                   <div key={ri}>
+                    {/* FIX: resolved merge conflict — road_polyline when in road mode,
+                        straight-line pts as fallback; dashArray only in straight-line mode */}
                     <Polyline
-                        positions={
-                          roadMode && route.road_polyline?.length > 0
-                            ? route.road_polyline  // actual road coords from ORS
-                            : pts                   // fallback straight lines
-                        }
-                        color={color} weight={3} opacity={0.85}
-                        dashArray={roadMode ? undefined : (ri > 0 ? '8 4' : undefined)}
-                      />
-                      dashArray={ri > 0 ? '8 4' : undefined} />
+                      positions={
+                        roadMode && route.road_polyline?.length > 0
+                          ? route.road_polyline
+                          : pts
+                      }
+                      color={color}
+                      weight={3}
+                      opacity={0.85}
+                      dashArray={!roadMode && ri > 0 ? '8 4' : undefined}
+                    />
                     {route.stops.slice(1, -1).map((s, si) => (
                       <Marker key={`${ri}-${si}`} position={[s.lat, s.lon]} icon={makeIcon(color, (s as any).priority || 1)}>
                         <Popup>
