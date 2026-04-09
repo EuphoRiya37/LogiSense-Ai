@@ -54,9 +54,9 @@ export default function LiveTracking() {
   const [kpis, setKpis] = useState({ total: 0, in_transit: 0, delayed: 0, delivered: 0, on_time_rate: 0 })
   const [connected, setConnected] = useState(false)
   const [selected, setSelected] = useState<LiveShipment | null>(null)
-  const alertCount = useRef(0)
   const [stressLoading, setStressLoading] = useState(false)
   const [revenueRisk, setRevenueRisk] = useState<any>(null)
+  const connectionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     const unsub = subscribeTracking(data => {
@@ -64,9 +64,22 @@ export default function LiveTracking() {
       setAlerts(data.alerts.slice(0, 6))
       setKpis(data.kpis)
       setConnected(true)
+      if (connectionTimer.current) {
+        clearTimeout(connectionTimer.current)
+        connectionTimer.current = null
+      }
     })
-    const timer = setTimeout(() => !connected && setConnected(false), 5000)
-    return () => { unsub(); clearTimeout(timer) }
+
+    connectionTimer.current = setTimeout(() => {
+      setConnected(prev => {
+        return prev ? prev : false
+      })
+    }, 5000)
+
+    return () => {
+      unsub()
+      if (connectionTimer.current) clearTimeout(connectionTimer.current)
+    }
   }, [])
 
   const statusCounts = shipments.reduce((acc, s) => {
@@ -132,37 +145,37 @@ export default function LiveTracking() {
       </div>
 
       {revenueRisk && (
-  <div className="glass-card p-4 fade-in-up" style={{ border: '1px solid rgba(239,68,68,0.25)' }}>
-    <div className="flex items-center justify-between mb-3">
-      <div className="flex items-center gap-2">
-        <DollarSign size={14} className="text-red-400" />
-        <span className="text-sm font-semibold text-white">Revenue at Risk</span>
-        <span className="text-xs font-mono text-red-400 bg-red-400/10 px-2 py-0.5 rounded-full">
-          {revenueRisk.count} delayed shipments
-        </span>
-      </div>
-      <div className="text-2xl font-bold font-mono text-red-400">
-        ${revenueRisk.total_revenue_at_risk.toLocaleString()}
-      </div>
-    </div>
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-40 overflow-y-auto">
-      {revenueRisk.at_risk_shipments.map((r: any) => (
-        <div key={r.shipment_id} className="glass-card px-3 py-2 border-l-2 border-red-500/40">
-          <div className="flex justify-between text-xs font-mono">
-            <span className="text-red-400 font-bold">{r.shipment_id}</span>
-            <span className="text-red-300">-${r.penalty_usd}</span>
+        <div className="glass-card p-4 fade-in-up" style={{ border: '1px solid rgba(239,68,68,0.25)' }}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <DollarSign size={14} className="text-red-400" />
+              <span className="text-sm font-semibold text-white">Revenue at Risk</span>
+              <span className="text-xs font-mono text-red-400 bg-red-400/10 px-2 py-0.5 rounded-full">
+                {revenueRisk.count} delayed shipments
+              </span>
+            </div>
+            <div className="text-2xl font-bold font-mono text-red-400">
+              ${revenueRisk.total_revenue_at_risk.toLocaleString()}
+            </div>
           </div>
-          <div className="text-[10px] text-slate-500 mt-0.5">{r.destination} · {r.delay_days}d delay · SLA {r.sla_penalty_pct}%</div>
-          <div className="text-[10px] text-orange-400">{r.delay_reason}</div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-40 overflow-y-auto">
+            {revenueRisk.at_risk_shipments.map((r: any) => (
+              <div key={r.shipment_id} className="glass-card px-3 py-2 border-l-2 border-red-500/40">
+                <div className="flex justify-between text-xs font-mono">
+                  <span className="text-red-400 font-bold">{r.shipment_id}</span>
+                  <span className="text-red-300">-${r.penalty_usd}</span>
+                </div>
+                <div className="text-[10px] text-slate-500 mt-0.5">{r.destination} · {r.delay_days}d delay · SLA {r.sla_penalty_pct}%</div>
+                <div className="text-[10px] text-orange-400">{r.delay_reason}</div>
+              </div>
+            ))}
+          </div>
+          <button onClick={() => setRevenueRisk(null)}
+            className="mt-2 text-[10px] text-slate-600 hover:text-slate-400 font-mono">
+            Dismiss
+          </button>
         </div>
-      ))}
-    </div>
-    <button onClick={() => setRevenueRisk(null)}
-      className="mt-2 text-[10px] text-slate-600 hover:text-slate-400 font-mono">
-      Dismiss
-    </button>
-  </div>
-)}
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-5">
         {/* Map */}
