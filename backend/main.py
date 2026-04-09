@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from config import settings
 from data.loader import DataLoader
 from data.simulator import ShipmentSimulator
-from data.weather import get_global_weather_snapshot, get_weather_for_region
+from data.weather import (get_global_weather_snapshot, get_weather_for_region, get_weather_eta_adjustment,)
 from data.insights import generate_insights
 from ml.eta_model import ETAPredictor
 from ml.delay_model import DelayPredictor
@@ -267,7 +267,6 @@ def predict_full(payload: ShipmentInput):
 
     # Apply live weather penalty if region is known
     try:
-        from data.weather import get_weather_for_region, get_weather_eta_adjustment
         region = d.get("order_region", "North America")
         w = get_weather_for_region(region)
         adj = get_weather_eta_adjustment(w["condition"], w["wind_kph"])
