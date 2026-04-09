@@ -330,15 +330,16 @@ export default function RouteOptimizer() {
                 return (
                   <div key={ri}>
                     <Polyline
-                        positions={
-                          roadMode && route.road_polyline?.length > 0
-                            ? route.road_polyline  // actual road coords from ORS
-                            : pts                   // fallback straight lines
-                        }
-                        color={color} weight={3} opacity={0.85}
-                        dashArray={roadMode ? undefined : (ri > 0 ? '8 4' : undefined)}
-                      />
-                      dashArray={ri > 0 ? '8 4' : undefined} />
+                      positions={
+                        roadMode && route.road_polyline?.length > 0
+                          ? route.road_polyline
+                          : pts
+                      }
+                      color={color}
+                      weight={3}
+                      opacity={0.85}
+                      dashArray={roadMode ? undefined : (ri > 0 ? '8 4' : undefined)}
+                    />
                     {route.stops.slice(1, -1).map((s, si) => (
                       <Marker key={`${ri}-${si}`} position={[s.lat, s.lon]} icon={makeIcon(color, (s as any).priority || 1)}>
                         <Popup>
