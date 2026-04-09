@@ -74,6 +74,11 @@ export default function Dashboard() {
         <KPICard label="Avg Order" value={`$${s.avg_order_value.toFixed(0)}`}
           icon={<DollarSign size={16} />} accent="#60a5fa"
           sublabel="Revenue per order" />
+        <KPICard label="Est. Delay Cost" value={`$${(s.avg_delay_days * s.total_shipments * 12.5).toFixed(0)}`}
+          icon={<DollarSign size={16} />}
+          accent="#ef4444"
+          sublabel="@ $12.5/ship/day"
+/>
       </div>
 
       {/* Charts Row 1 */}
