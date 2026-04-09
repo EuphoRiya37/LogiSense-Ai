@@ -90,6 +90,20 @@ async def lifespan(app: FastAPI):
         _bg_task.cancel()
     logger.info("Shutdown complete")
 
+class RouteStopInput(BaseModel):
+    id: str
+    name: str
+    lat: float
+    lon: float
+    priority: int
+    weight_kg: float
+
+class RouteRequest(BaseModel):
+    shipments: List[RouteStopInput]
+    num_vehicles: int
+    optimize_for: str = "balanced"
+    depot_lat: float
+    depot_lon: float
 
 app = FastAPI(title="LogiSense AI", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
@@ -166,12 +180,6 @@ class LocationInput(BaseModel):
     destination: Optional[str]   = None
     distance_km: Optional[float] = 50.0
 
-class RouteRequest(BaseModel):
-    shipments:    List[LocationInput]
-    num_vehicles: int   = Field(3, ge=1, le=10)
-    optimize_for: str   = "balanced"
-    depot_lat:    float = 40.7128
-    depot_lon:    float = -74.0060
 
 class AllocationRequest(BaseModel):
     shipments: List[Dict[str, Any]]
