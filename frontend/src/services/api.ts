@@ -11,9 +11,19 @@ export const getTrends = () => api.get('/api/analytics/trends').then(r => r.data
 export const getModePerformance = () => api.get('/api/analytics/mode-performance').then(r => r.data);
 export const getModelPerformance = () => api.get('/api/analytics/model-performance').then(r => r.data);
 export const getLiveShipments = () => api.get('/api/shipments').then(r => r.data);
+export const getInsights        = () => api.get('/api/insights').then(r => r.data);
+export const getGlobalWeather   = () => api.get('/api/weather/global').then(r => r.data);
+export const getDemandForecast  = () => api.get('/api/analytics/demand-forecast').then(r => r.data);
 
 export const predictFull = (payload: ShipmentInput): Promise<PredictionResult> =>
   api.post('/api/predict/full', payload).then(r => r.data);
+export const predictBatch = (shipments: ShipmentInput[]) =>
+  api.post('/api/predict/batch', { shipments }).then(r => r.data);
+
+export const predictWhatIf = (
+  base: ShipmentInput,
+  scenarios: Array<{ label: string; changes: Partial<ShipmentInput> }>
+) => api.post('/api/predict/whatif', { base, scenarios }).then(r => r.data);
 
 export const optimizeRoutes = (payload: {
   shipments: Array<{ lat: number; lon: number; priority: number; weight_kg: number; name?: string; id?: string }>;
