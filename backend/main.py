@@ -5,6 +5,7 @@ import sys
 from contextlib import asynccontextmanager
 from typing import List, Optional, Any, Dict
 import io, csv
+import random
 
 import httpx
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
@@ -97,6 +98,39 @@ app.add_middleware(
     allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
 )
 
+@app.post("/api/optimize/routes/road")
+async def optimize_routes_road(req: RouteRequest):
+    """
+    Same as /api/optimize/routes but also fetches actual road polylines
+    from OpenRouteService for each vehicle route.
+    """
+    ships = [s.model_dump() for s in req.shipments]
+    result = route_optimizer.optimize(
+        shipments=ships,
+        num_vehicles=req.num_vehicles,
+        optimize_for=req.optimize_for,
+        depot_lat=req.depot_lat,
+        depot_lon=req.depot_lon,
+    )
+
+    api_key = settings.ORS_API_KEY
+    if api_key:
+        for route in result.get("routes", []):
+            stops = route.get("stops", [])
+            if len(stops) >= 2:
+                # ORS needs [lon, lat] order
+                coords = [[s["lon"], s["lat"]] for s in stops]
+                polyline = await route_optimizer.fetch_road_polyline(coords, api_key)
+                route["road_polyline"] = polyline  # [lat, lon] pairs for Leaflet
+            else:
+                route["road_polyline"] = []
+    else:
+        # No key: straight lines remain, flag it
+        for route in result.get("routes", []):
+            route["road_polyline"] = []
+        result["road_routing_note"] = "Set OPENROUTESERVICE_API_KEY in .env for road-following routes"
+
+    return result
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 class ShipmentInput(BaseModel):
@@ -226,9 +260,26 @@ def get_live_shipments():
 
 @app.post("/api/predict/full")
 def predict_full(payload: ShipmentInput):
-    if not eta_predictor or not delay_predictor: raise HTTPException(503, "Models not ready")
+    if not eta_predictor or not delay_predictor:
+        raise HTTPException(503, "Models not ready")
     d = payload.model_dump()
-    return {**eta_predictor.predict(d), **delay_predictor.predict(d)}
+    result = {**eta_predictor.predict(d), **delay_predictor.predict(d)}
+
+    # Apply live weather penalty if region is known
+    try:
+        from data.weather import get_weather_for_region, get_weather_eta_adjustment
+        region = d.get("order_region", "North America")
+        w = get_weather_for_region(region)
+        adj = get_weather_eta_adjustment(w["condition"], w["wind_kph"])
+        if adj["weather_delay_days"] > 0.1:
+            result["eta_days"] = round(result["eta_days"] + adj["weather_delay_days"], 1)
+            result["weather_adjustment"] = adj
+        else:
+            result["weather_adjustment"] = None
+    except Exception:
+        result["weather_adjustment"] = None
+
+    return result
 
 @app.post("/api/predict/eta")
 def predict_eta(payload: ShipmentInput):
@@ -377,6 +428,63 @@ async def tracking_ws(ws: WebSocket):
     except Exception:
         ws_manager.disconnect(ws)
 
+@app.get("/api/geocode")
+async def geocode(q: str):
+    """Free geocoding via Nominatim (OpenStreetMap). No API key needed."""
+    try:
+        async with httpx.AsyncClient(timeout=8.0, headers={"User-Agent": "LogiSenseAI/1.0"}) as client:
+            resp = await client.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={"q": q, "format": "json", "limit": 5}
+            )
+            results = resp.json()
+            return [
+                {
+                    "display_name": r["display_name"],
+                    "lat": float(r["lat"]),
+                    "lon": float(r["lon"]),
+                    "type": r.get("type", ""),
+                }
+                for r in results
+            ]
+    except Exception as e:
+        raise HTTPException(500, f"Geocoding failed: {e}")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host=settings.HOST, port=settings.PORT, reload=True)
+
+@app.post("/api/stress-test")
+def run_stress_test():
+    if not simulator:
+        raise HTTPException(503, "Simulator not ready")
+    return simulator.stress_test()
+
+@app.get("/api/analytics/revenue-at-risk")
+def revenue_at_risk():
+    if not simulator:
+        raise HTTPException(503, "Simulator not ready")
+    at_risk = []
+    total_risk = 0.0
+    for s in simulator.shipments:
+        if s["status"] == "delayed":
+            order_value = round(random.uniform(500, 5000), 2)
+            delay_days = max(1, s["eta_hours"] // 24)
+            sla_penalty_pct = min(0.20, delay_days * 0.05)
+            penalty = round(order_value * sla_penalty_pct, 2)
+            total_risk += penalty
+            at_risk.append({
+                "shipment_id": s["id"],
+                "destination": s["destination"],
+                "order_value": order_value,
+                "delay_days": delay_days,
+                "sla_penalty_pct": round(sla_penalty_pct * 100, 1),
+                "penalty_usd": penalty,
+                "delay_reason": s.get("delay_reason", "Unknown"),
+            })
+    return {
+        "at_risk_shipments": at_risk,
+        "total_revenue_at_risk": round(total_risk, 2),
+        "count": len(at_risk),
+    }
+
