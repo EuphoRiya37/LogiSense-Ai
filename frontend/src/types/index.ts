@@ -22,6 +22,13 @@ export interface ShipmentInput {
   order_year?: number;
 }
 
+export interface WeatherAdjustment {
+  weather_delay_days: number;
+  weather_condition: string;
+  weather_reason: string | null;
+  icon: string;
+}
+
 export interface ETAResult {
   eta_days: number;
   confidence_lower: number;
@@ -37,7 +44,9 @@ export interface DelayResult {
   is_predicted_delayed: boolean;
 }
 
-export interface PredictionResult extends ETAResult, DelayResult {}
+export interface PredictionResult extends ETAResult, DelayResult {
+  weather_adjustment?: WeatherAdjustment | null;
+}
 
 export interface LiveShipment {
   id: string;
@@ -77,15 +86,16 @@ export interface OptimizedRoute {
   stops: RouteStop[];
   stop_indices: number[];
   color: string;
+  road_polyline?: [number, number][];
 }
 
-export interface RouteResult {
-  routes: OptimizedRoute[];
-  stats: RouteStats;
-  naive_stats: RouteStats;
-  savings: RouteSavings;
-  algorithm: string;
-  depot: RouteStop;
+export interface RouteBreakdown {
+  vehicle_id: number;
+  distance_km: number;
+  time_hours: number;
+  cost_usd: number;
+  num_stops: number;
+  co2_kg?: number;
 }
 
 export interface RouteStats {
@@ -96,19 +106,22 @@ export interface RouteStats {
   route_breakdown: RouteBreakdown[];
 }
 
-export interface RouteBreakdown {
-  vehicle_id: number;
-  distance_km: number;
-  time_hours: number;
-  cost_usd: number;
-  num_stops: number;
-}
-
 export interface RouteSavings {
   distance_saved_km: number;
   time_saved_hours: number;
   cost_saved_usd: number;
+  co2_saved_kg?: number;
   improvement_pct: number;
+}
+
+export interface RouteResult {
+  routes: OptimizedRoute[];
+  stats: RouteStats;
+  naive_stats: RouteStats;
+  savings: RouteSavings;
+  algorithm: string;
+  depot: RouteStop;
+  road_routing_note?: string;
 }
 
 export interface SummaryStats {
