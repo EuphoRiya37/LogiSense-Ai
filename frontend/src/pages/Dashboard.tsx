@@ -3,8 +3,8 @@ import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, LineChart, Line, CartesianGrid, Legend
 } from 'recharts'
-import { Package, TrendingUp, Clock, AlertTriangle, DollarSign, Activity } from 'lucide-react'
-import { getSummary, getTrends, getModePerformance } from '../services/api'
+import { Package, TrendingUp, Clock, AlertTriangle, DollarSign, Activity, Lightbulb, CloudRain } from 'lucide-react'
+import { getSummary, getTrends, getModePerformance, getInsights, getGlobalWeather } from '../services/api'
 import { KPICard, SectionHeader, Spinner, ProgressBar } from '../components/ui'
 
 const PALETTE = ['#00e5ff', '#a78bfa', '#00ff87', '#fbbf24', '#f472b6', '#60a5fa', '#fb923c']
@@ -127,19 +127,21 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Trend line */}
+      {/* Trend line - dual Y axis */}
       {trends && trends.length > 0 && (
         <div className="glass-card p-5">
-          <div className="stat-label mb-4">Monthly Late Delivery Rate Trend</div>
+          <div className="stat-label mb-4">Monthly Late Delivery Rate & Avg Shipping Days</div>
           <ResponsiveContainer width="100%" height={160}>
             <LineChart data={trends}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-              <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 9, fontFamily: 'JetBrains Mono' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: '#64748b', fontSize: 9, fontFamily: 'JetBrains Mono' }} axisLine={false} tickLine={false}
-                tickFormatter={v => `${(v * 100).toFixed(0)}%`} />
+              <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 9, fontFamily: 'JetBrains Mono' }} axisLine={false} tickLine={false} interval={2} />
+              <YAxis yAxisId="left" tick={{ fill: '#64748b', fontSize: 9, fontFamily: 'JetBrains Mono' }} axisLine={false} tickLine={false}
+                tickFormatter={v => `${(Number(v) * 100).toFixed(0)}%`} domain={[0, 'auto']} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fill: '#64748b', fontSize: 9, fontFamily: 'JetBrains Mono' }} axisLine={false} tickLine={false}
+                tickFormatter={v => `${Number(v).toFixed(1)}d`} />
               <Tooltip content={<CustomTooltip />} />
-              <Line type="monotone" dataKey="late_pct" stroke="#ff6b35" strokeWidth={2} dot={false} name="Late Rate" />
-              <Line type="monotone" dataKey="avg_days" stroke="#00e5ff" strokeWidth={2} dot={false} name="Avg Days" />
+              <Line yAxisId="left" type="monotone" dataKey="late_pct" stroke="#ff6b35" strokeWidth={2} dot={false} name="Late Rate" />
+              <Line yAxisId="right" type="monotone" dataKey="avg_days" stroke="#00e5ff" strokeWidth={2} dot={false} name="Avg Days" />
             </LineChart>
           </ResponsiveContainer>
         </div>
