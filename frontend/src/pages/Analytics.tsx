@@ -1,11 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
-  RadarChart, PolarGrid, PolarAngleAxis, Radar, ScatterChart,
-  Scatter, ZAxis, CartesianGrid, LineChart, Line, Legend,
+  RadarChart, PolarGrid, PolarAngleAxis, Radar, CartesianGrid, LineChart,
+  Line, Legend, ComposedChart, Area,
 } from 'recharts'
-import { BarChart3, Activity, TrendingUp, Cpu } from 'lucide-react'
-import { getSummary, getTrends, getModePerformance, getModelPerformance } from '../services/api'
+import { BarChart3, Activity, TrendingUp, Cpu, TrendingDown } from 'lucide-react'
+import { getSummary, getTrends, getModePerformance, getModelPerformance, getDemandForecast } from '../services/api'
 import { SectionHeader, Spinner, ProgressBar } from '../components/ui'
 
 const Tip = ({ active, payload, label }: any) => {
@@ -30,6 +30,7 @@ export default function Analytics() {
   const { data: trends }   = useQuery({ queryKey: ['trends'],   queryFn: getTrends })
   const { data: modePerfRaw } = useQuery({ queryKey: ['modeperf'], queryFn: getModePerformance })
   const { data: modelPerf } = useQuery({ queryKey: ['modelperf'], queryFn: getModelPerformance })
+  const { data: demandForecast } = useQuery({ queryKey: ['demand-forecast'], queryFn: getDemandForecast })
 
   if (isLoading) return (
     <div className="flex items-center justify-center h-64 gap-3 text-slate-500">
@@ -183,6 +184,35 @@ export default function Analytics() {
               <Line yAxisId="right" type="monotone" dataKey="days" stroke="#00e5ff" strokeWidth={2} dot={false} name="Avg Days" />
             </LineChart>
           </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Demand Forecast */}
+      {demandForecast && demandForecast.length > 0 && (
+        <div className="glass-card p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <TrendingDown size={13} className="text-neon-green" />
+            <span className="stat-label">Demand Forecasting — Next 6 Months (Exponential Smoothing + Linear Trend)</span>
+            <span className="ml-auto text-[10px] font-mono px-2 py-0.5 rounded-full"
+              style={{ background: 'rgba(0,255,135,0.12)', color: '#00ff87' }}>AI FORECAST</span>
+          </div>
+          <ResponsiveContainer width="100%" height={200}>
+            <ComposedChart data={demandForecast}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+              <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 9, fontFamily: 'JetBrains Mono' }} axisLine={false} tickLine={false} interval={1} />
+              <YAxis tick={{ fill: '#64748b', fontSize: 9, fontFamily: 'JetBrains Mono' }} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={{ background: '#0a1128', border: '1px solid rgba(0,229,255,0.2)', borderRadius: 8, fontFamily: 'JetBrains Mono', fontSize: 11 }} />
+              <Legend formatter={v => <span className="text-xs text-slate-400 font-mono">{v}</span>} />
+              <Bar dataKey="count" name="Actual Shipments" fill="rgba(0,229,255,0.3)" radius={[3,3,0,0]} />
+              <Line type="monotone" dataKey="smoothed" stroke="#00e5ff" strokeWidth={2} dot={false} name="Smoothed Trend" />
+              <Area type="monotone" dataKey="forecast" stroke="#00ff87" fill="rgba(0,255,135,0.12)"
+                strokeWidth={2} strokeDasharray="6 3" name="6-Month Forecast" dot={{ fill: '#00ff87', r: 4 }} />
+            </ComposedChart>
+          </ResponsiveContainer>
+          <div className="mt-3 text-[10px] font-mono text-slate-600 flex items-center gap-4">
+            <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 bg-cyan-400 inline-block" />Historical trend</span>
+            <span className="flex items-center gap-1.5"><span className="w-3 h-0.5 border-t-2 border-dashed border-neon-green inline-block" />AI forecast (seasonal-adjusted)</span>
+          </div>
         </div>
       )}
 
