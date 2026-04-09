@@ -20,8 +20,6 @@ backend/data/*.csv
 .env.*
 *.env
 *.env.*
-backend/.env
-frontend/.env
 
 # Node
 node_modules/
