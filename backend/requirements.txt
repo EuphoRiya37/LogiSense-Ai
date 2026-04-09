@@ -1,0 +1,10 @@
+fastapi
+httpx
+numpy
+ortools
+pandas
+python-dotenv
+scikit-learn
+uvicorn[standard]
+websockets
+xgboost
