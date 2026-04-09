@@ -1,10 +1,10 @@
-# 🚀 LogiSense AI — Intelligent Logistics Optimization System
+# LogiSense AI — Intelligent Logistics Optimization System
 
 > AI-powered supply chain intelligence platform: ETA prediction · delay risk · route optimization · fleet allocation · live tracking · demand forecasting · weather integration
 
 ---
 
-## ✨ Feature Overview
+## Feature Overview
 
 | Page | What It Does |
 |---|---|
