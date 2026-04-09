@@ -14,6 +14,7 @@ export const getLiveShipments = () => api.get('/api/shipments').then(r => r.data
 export const getInsights        = () => api.get('/api/insights').then(r => r.data);
 export const getGlobalWeather   = () => api.get('/api/weather/global').then(r => r.data);
 export const getDemandForecast  = () => api.get('/api/analytics/demand-forecast').then(r => r.data);
+export const getWeather = (lat: number, lon: number) => api.get('/api/weather', { params: { lat, lon } }).then(r => r.data);
 
 export const predictFull = (payload: ShipmentInput): Promise<PredictionResult> =>
   api.post('/api/predict/full', payload).then(r => r.data);
