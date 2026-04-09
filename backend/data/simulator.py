@@ -65,10 +65,41 @@ class ShipmentSimulator:
 
     def _init_shipments(self, n: int):
         np.random.seed(int(time.time()) % 1000)
+        # Force a realistic distribution: in-transit, delayed, out for delivery
+        forced_statuses = (
+            ["in_transit"] * int(n * 0.50) +
+            ["delayed"] * int(n * 0.20) +
+            ["out_for_delivery"] * int(n * 0.20) +
+            ["pending"] * max(1, int(n * 0.10))
+        )
+        random.shuffle(forced_statuses)
         for i in range(n):
             origin = random.choice(CITY_HUBS)
             dest = random.choice([c for c in CITY_HUBS if c != origin])
-            self.shipments.append(self._create_shipment(i + 1, origin, dest))
+            s = self._create_shipment(i + 1, origin, dest)
+            if i < len(forced_statuses):
+                forced = forced_statuses[i]
+                s["status"] = forced
+                s["status_color"] = STATUS_COLORS[forced]
+                # Cap progress so nothing starts near-delivered on init
+                if forced == "in_transit":
+                    s["progress"] = round(random.uniform(5, 75), 1)
+                elif forced == "delayed":
+                    s["progress"] = round(random.uniform(10, 60), 1)
+                    if not s["delay_reason"]:
+                        s["delay_reason"] = random.choice([
+                            "Weather conditions", "Traffic congestion",
+                            "Customs clearance", "Mechanical issue"
+                        ])
+                elif forced == "out_for_delivery":
+                    s["progress"] = round(random.uniform(80, 95), 1)
+                else:
+                    s["progress"] = round(random.uniform(2, 15), 1)
+                # Recalculate position
+                pct = s["progress"] / 100
+                s["current_lat"] = origin["lat"] + (s["dest_lat"] - origin["lat"]) * pct + random.uniform(-0.3, 0.3)
+                s["current_lon"] = origin["lon"] + (s["dest_lon"] - origin["lon"]) * pct + random.uniform(-0.3, 0.3)
+            self.shipments.append(s)
 
     def _create_shipment(self, sid: int, origin: dict, dest: dict) -> dict:
         progress = random.uniform(0.05, 0.95)
