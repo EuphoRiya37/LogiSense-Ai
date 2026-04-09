@@ -1,0 +1,28 @@
+import axios from 'axios';
+import type { ShipmentInput, PredictionResult, RouteResult, SummaryStats } from '../types';
+
+const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+const api = axios.create({ baseURL: BASE, timeout: 30000 });
+
+export const getStatus = () => api.get('/api/status').then(r => r.data);
+export const getSummary = (): Promise<SummaryStats> => api.get('/api/analytics/summary').then(r => r.data);
+export const getTrends = () => api.get('/api/analytics/trends').then(r => r.data);
+export const getModePerformance = () => api.get('/api/analytics/mode-performance').then(r => r.data);
+export const getModelPerformance = () => api.get('/api/analytics/model-performance').then(r => r.data);
+export const getLiveShipments = () => api.get('/api/shipments').then(r => r.data);
+
+export const predictFull = (payload: ShipmentInput): Promise<PredictionResult> =>
+  api.post('/api/predict/full', payload).then(r => r.data);
+
+export const optimizeRoutes = (payload: {
+  shipments: Array<{ lat: number; lon: number; priority: number; weight_kg: number; name?: string; id?: string }>;
+  num_vehicles: number;
+  depot_lat?: number;
+  depot_lon?: number;
+}): Promise<RouteResult> => api.post('/api/optimize/routes', payload).then(r => r.data);
+
+export const allocateShipments = (shipments: unknown[]) =>
+  api.post('/api/allocate', { shipments }).then(r => r.data);
+
+export default api;
