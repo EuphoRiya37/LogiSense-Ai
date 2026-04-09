@@ -20,16 +20,6 @@ CITY_HUBS = [
     {"name": "Mumbai", "lat": 19.0760, "lon": 72.8777},
     {"name": "São Paulo", "lat": -23.5505, "lon": -46.6333},
     {"name": "Sydney", "lat": -33.8688, "lon": 151.2093},
-    {"name": "Dubai",        "lat": 25.2048, "lon":  55.2708},
-    {"name": "Singapore",    "lat":  1.3521, "lon": 103.8198},
-    {"name": "Lagos",        "lat":  6.5244, "lon":   3.3792},
-    {"name": "Cairo",        "lat": 30.0444, "lon":  31.2357},
-    {"name": "Mexico City",  "lat": 19.4326, "lon": -99.1332},
-    {"name": "Toronto",      "lat": 43.6532, "lon": -79.3832},
-    {"name": "Amsterdam",    "lat": 52.3676, "lon":   4.9041},
-    {"name": "Shanghai",     "lat": 31.2304, "lon": 121.4737},
-    {"name": "Johannesburg", "lat":-26.2041, "lon":  28.0473},
-    {"name": "Buenos Aires", "lat":-34.6037, "lon": -58.3816},
 ]
 
 PRODUCTS = [
@@ -218,32 +208,3 @@ class ShipmentSimulator:
             "delivered": delivered,
             "on_time_rate": round((total - delayed) / max(total, 1) * 100, 1),
         }
-    
-    def stress_test(self) -> dict:
-        """
-        Simulate a sudden logistics crisis:
-        - 40% of in-transit ships become delayed
-        - Assign random severe delay reasons
-        - Returns count of affected shipments
-        """
-        import random
-        affected = 0
-        reasons = [
-             "Severe storm — route closed",
-            "Road blocked — accident ahead",
-            "Port strike — customs shutdown",
-            "Bridge closure — mandatory reroute",
-            "Extreme weather — operations suspended",
-        ]
-        for s in self.shipments:
-            if s["status"] in ("in_transit", "out_for_delivery") and random.random() < 0.4:
-                s["status"] = "delayed"
-                s["status_color"] = STATUS_COLORS["delayed"]
-                s["delay_reason"] = random.choice(reasons)
-                s["eta_hours"] = s["eta_hours"] + random.randint(12, 36)
-                affected += 1
-        return {
-            "affected": affected,
-            "message": f"Stress test: {affected} shipments disrupted",
-            "timestamp": datetime.now().isoformat()
-    }
