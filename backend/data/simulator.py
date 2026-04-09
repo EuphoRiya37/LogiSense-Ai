@@ -101,24 +101,32 @@ class ShipmentSimulator:
         }
 
     def tick(self) -> List[Dict]:
-        """Advance simulation one tick."""
-        for s in self.shipments:
+        """Advance simulation one tick. Respawn delivered shipments to keep map alive."""
+        for i, s in enumerate(self.shipments):
             if s["status"] == "delivered":
+                # Respawn: pick new random origin/destination after a short cooldown
+                if random.random() < 0.15:  # 15% chance per tick to respawn
+                    origin = random.choice(CITY_HUBS)
+                    dest = random.choice([c for c in CITY_HUBS if c != origin])
+                    self.shipments[i] = self._create_shipment(i + 1, origin, dest)
+                    self.shipments[i]["progress"] = 0.0
+                    self.shipments[i]["status"] = "in_transit"
                 continue
 
             # Move shipment
-            move = random.uniform(0.003, 0.012)
-            s["progress"] = min(100.0, round(s["progress"] + move * 100, 1))
-            s["current_lat"] += (s["dest_lat"] - s["current_lat"]) * move * 5
-            s["current_lon"] += (s["dest_lon"] - s["current_lon"]) * move * 5
-            s["current_lat"] += random.uniform(-0.01, 0.01)
-            s["current_lon"] += random.uniform(-0.01, 0.01)
+            move = random.uniform(0.002, 0.008)
+            s["progress"] = min(99.5, round(s["progress"] + move * 100, 1))
+            s["current_lat"] += (s["dest_lat"] - s["current_lat"]) * move * 4
+            s["current_lon"] += (s["dest_lon"] - s["current_lon"]) * move * 4
+            s["current_lat"] += random.uniform(-0.05, 0.05)
+            s["current_lon"] += random.uniform(-0.05, 0.05)
 
             # Status transition
-            if s["progress"] >= 95 and s["status"] not in ("delivered", "delivery_attempt_failed"):
+            if s["progress"] >= 94 and s["status"] not in ("delivered", "delivery_attempt_failed"):
                 s["status"] = "out_for_delivery"
             elif s["progress"] >= 99:
                 s["status"] = "delivered"
+                s["progress"] = 100.0
             else:
                 transitions = STATUS_TRANSITIONS.get(s["status"], [s["status"]])
                 s["status"] = random.choice(transitions)
