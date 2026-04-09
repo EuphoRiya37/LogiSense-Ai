@@ -1,10 +1,10 @@
-# LogiSense AI — Intelligent Logistics Optimization System
+# 🚀 LogiSense AI — Intelligent Logistics Optimization System
 
 > AI-powered supply chain intelligence platform: ETA prediction · delay risk · route optimization · fleet allocation · live tracking · demand forecasting · weather integration
 
 ---
 
-## Feature Overview
+## ✨ Feature Overview
 
 | Page | What It Does |
 |---|---|
@@ -17,7 +17,7 @@
 
 ---
 
-##  ML Architecture
+## 🧠 ML Architecture
 
 - **ETA Prediction** — XGBoost + GradientBoost + Random Forest ensemble (R² ≈ 0.93, MAE ≈ 0.5 days)
 - **Delay Risk** — XGBoost classifier with probability calibration (AUC-ROC ≈ 0.94)
@@ -28,7 +28,7 @@
 
 ---
 
-## Quick Start
+## ⚡ Quick Start
 
 ### Prerequisites
 - Python 3.10–3.13 (NOT 3.14 — xgboost wheels not published yet)
@@ -81,7 +81,7 @@ Full interactive docs: **http://localhost:8000/docs**
 
 ---
 
-##  Judging Criteria
+## 📊 Judging Criteria
 
 | Criterion | Implementation |
 |---|---|
