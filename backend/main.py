@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from typing import List, Optional, Any, Dict
 import io, csv
 import random
+import hashlib
 
 import httpx
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
@@ -131,6 +132,12 @@ async def optimize_routes_road(req: RouteRequest):
         result["road_routing_note"] = "Set OPENROUTESERVICE_API_KEY in .env for road-following routes"
 
     return result
+
+def stable_order_value(shipment_id: str) -> float:
+    seed = int(hashlib.md5(shipment_id.encode()).hexdigest()[:8], 16)
+    rng = random.Random(seed)
+    return round(rng.uniform(500, 5000), 2)
+
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
 class ShipmentInput(BaseModel):
@@ -467,7 +474,7 @@ def revenue_at_risk():
     total_risk = 0.0
     for s in simulator.shipments:
         if s["status"] == "delayed":
-            order_value = round(random.uniform(500, 5000), 2)
+            order_value = stable_order_value(s["id"])
             delay_days = max(1, s["eta_hours"] // 24)
             sla_penalty_pct = min(0.20, delay_days * 0.05)
             penalty = round(order_value * sla_penalty_pct, 2)
