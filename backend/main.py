@@ -555,7 +555,7 @@ class WhatIfRequest(BaseModel):
     scenarios: List[Dict[str, Any]]
 
 
-# ── Core endpoints ─────────────────────────────────────────────────────────────
+# ── Core s ─────────────────────────────────────────────────────────────
 @app.get("/")
 def health():
     return {"status": "ok", "app": settings.APP_NAME, "version": settings.VERSION}
@@ -836,9 +836,23 @@ async def geocode(q: str):
 
 @app.post("/api/stress-test")
 def run_stress_test():
+    """Inject random delays and disruptions into the live simulator."""
     if not simulator:
         raise HTTPException(503, "Simulator not ready")
-    return simulator.stress_test()
+    import random
+    injected = 0
+    for s in simulator.shipments:
+        if s["status"] == "in_transit" and random.random() < 0.4:
+            s["status"] = "delayed"
+            s["status_color"] = "#ff6b35"
+            s["delay_reason"] = random.choice([
+                "Stress test: road closure",
+                "Stress test: customs hold",
+                "Stress test: vehicle breakdown",
+                "Stress test: weather event",
+            ])
+            injected += 1
+    return {"injected_delays": injected, "total_shipments": len(simulator.shipments)}
 
 
 @app.get("/api/analytics/revenue-at-risk")
