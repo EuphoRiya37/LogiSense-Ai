@@ -16,6 +16,15 @@ export const getGlobalWeather   = () => api.get('/api/weather/global').then(r =>
 export const getDemandForecast  = () => api.get('/api/analytics/demand-forecast').then(r => r.data);
 export const getWeather = (lat: number, lon: number) => api.get('/api/weather', { params: { lat, lon } }).then(r => r.data);
 
+export const exportRoutes = (payload: {
+  shipments: any[]
+  num_vehicles: number
+  optimize_for?: string
+  depot_lat: number
+  depot_lon: number
+}) =>
+  api.post('/api/export/routes', { optimize_for: 'balanced', ...payload }, { responseType: 'blob' }).then(r => r.data)
+
 export const predictFull = (payload: ShipmentInput): Promise<PredictionResult> =>
   api.post('/api/predict/full', payload).then(r => r.data);
 export const predictBatch = (shipments: ShipmentInput[]) =>
@@ -23,18 +32,26 @@ export const predictBatch = (shipments: ShipmentInput[]) =>
 
 export const predictWhatIf = (
   base: ShipmentInput,
-  scenarios: Array<{ label: string; changes: Partial<ShipmentInput> }>
+  scenarios: any[]
 ) => api.post('/api/predict/whatif', { base, scenarios }).then(r => r.data);
 
 export const optimizeRoutes = (payload: {
-  shipments: Array<{ lat: number; lon: number; priority: number; weight_kg: number; name?: string; id?: string }>;
-  num_vehicles: number;
-  depot_lat?: number;
-  depot_lon?: number;
-}): Promise<RouteResult> => api.post('/api/optimize/routes', payload).then(r => r.data);
+  shipments: any[]
+  num_vehicles: number
+  optimize_for?: string
+  depot_lat: number
+  depot_lon: number
+}) =>
+  api.post('/api/optimize/routes', { optimize_for: 'balanced', ...payload }).then(r => r.data)
 
-export const optimizeRoutesRoad = (payload: Parameters<typeof optimizeRoutes>[0]) =>
-  api.post('/api/optimize/routes/road', payload).then(r => r.data);
+export const optimizeRoutesRoad = (payload: {
+  shipments: any[]
+  num_vehicles: number
+  optimize_for?: string
+  depot_lat: number
+  depot_lon: number
+}) =>
+  api.post('/api/optimize/routes/road', { optimize_for: 'balanced', ...payload }).then(r => r.data)
 
 export const geocode = (q: string) =>
   api.get('/api/geocode', { params: { q } }).then(r => r.data);
@@ -45,7 +62,7 @@ export const runStressTest = () =>
 export const getRevenueAtRisk = () =>
   api.get('/api/analytics/revenue-at-risk').then(r => r.data);
 
-export const allocateShipments = (shipments: unknown[]) =>
+export const allocateShipments = (shipments: any[]) =>
   api.post('/api/allocate', { shipments }).then(r => r.data);
 
 export default api;
