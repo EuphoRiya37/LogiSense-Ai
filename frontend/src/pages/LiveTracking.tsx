@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet'
 import L from 'leaflet'
-import { Radio, AlertTriangle, TrendingUp, Package, CheckCircle, Clock, Wifi, Zap, DollarSign } from 'lucide-react'
+import { Radio, AlertTriangle, TrendingUp, Package, CheckCircle, Cloud, Wifi } from 'lucide-react'
 import { subscribeTracking } from '../services/websocket'
+import { getWeather } from '../services/api'
 import type { LiveShipment, Alert } from '../types'
 import { SectionHeader, StatusBadge, Spinner } from '../components/ui'
-import { runStressTest, getRevenueAtRisk } from '../services/api'
 
 function makeShipIcon(color: string, status: string) {
   const size = status === 'delayed' ? 14 : status === 'delivered' ? 12 : 10
@@ -54,9 +54,8 @@ export default function LiveTracking() {
   const [kpis, setKpis] = useState({ total: 0, in_transit: 0, delayed: 0, delivered: 0, on_time_rate: 0 })
   const [connected, setConnected] = useState(false)
   const [selected, setSelected] = useState<LiveShipment | null>(null)
-  const [stressLoading, setStressLoading] = useState(false)
-  const [revenueRisk, setRevenueRisk] = useState<any>(null)
-  const connectionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [weather, setWeather] = useState<any>(null)
+  const alertCount = useRef(0)
 
   useEffect(() => {
     const unsub = subscribeTracking(data => {
@@ -64,23 +63,19 @@ export default function LiveTracking() {
       setAlerts(data.alerts.slice(0, 6))
       setKpis(data.kpis)
       setConnected(true)
-      if (connectionTimer.current) {
-        clearTimeout(connectionTimer.current)
-        connectionTimer.current = null
-      }
     })
-
-    connectionTimer.current = setTimeout(() => {
-      setConnected(prev => {
-        return prev ? prev : false
-      })
-    }, 5000)
-
-    return () => {
-      unsub()
-      if (connectionTimer.current) clearTimeout(connectionTimer.current)
-    }
+    const timer = setTimeout(() => !connected && setConnected(false), 5000)
+    return () => { unsub(); clearTimeout(timer) }
   }, [])
+
+  // Fetch real weather when a shipment is selected
+  useEffect(() => {
+    if (!selected) return
+    setWeather(null)
+    getWeather(selected.origin_lat, selected.origin_lon)
+      .then(setWeather)
+      .catch(() => setWeather(null))
+  }, [selected?.id])
 
   const statusCounts = shipments.reduce((acc, s) => {
     acc[s.status] = (acc[s.status] || 0) + 1
@@ -93,29 +88,6 @@ export default function LiveTracking() {
     <div className="space-y-5 max-w-[1400px]">
       <div className="flex items-center justify-between">
         <SectionHeader title="Live Tracking" subtitle="Real-time shipment monitoring via WebSocket" />
-        <div className="flex items-center gap-2">
-          <button
-            className="btn-ghost flex items-center gap-1.5 text-xs"
-            style={{ borderColor: 'rgba(239,68,68,0.4)', color: '#ef4444' }}
-            disabled={stressLoading}
-            onClick={async () => {
-              setStressLoading(true)
-              await runStressTest()
-              setStressLoading(false)
-            }}>
-            <Zap size={12} />
-            {stressLoading ? 'Running…' : 'Stress Test'}
-          </button>
-          <button
-            className="btn-ghost flex items-center gap-1.5 text-xs"
-            onClick={async () => {
-              const r = await getRevenueAtRisk()
-              setRevenueRisk(r)
-            }}>
-            <DollarSign size={12} />
-            Revenue Risk
-          </button>
-        </div>
         <div className="flex items-center gap-2 text-xs font-mono">
           <div className={`w-2 h-2 rounded-full ${connected ? 'bg-neon-green animate-pulse' : 'bg-red-500'}`} />
           <span className={connected ? 'text-neon-green' : 'text-red-400'}>
@@ -144,39 +116,6 @@ export default function LiveTracking() {
         ))}
       </div>
 
-      {revenueRisk && (
-        <div className="glass-card p-4 fade-in-up" style={{ border: '1px solid rgba(239,68,68,0.25)' }}>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <DollarSign size={14} className="text-red-400" />
-              <span className="text-sm font-semibold text-white">Revenue at Risk</span>
-              <span className="text-xs font-mono text-red-400 bg-red-400/10 px-2 py-0.5 rounded-full">
-                {revenueRisk.count} delayed shipments
-              </span>
-            </div>
-            <div className="text-2xl font-bold font-mono text-red-400">
-              ${revenueRisk.total_revenue_at_risk.toLocaleString()}
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-40 overflow-y-auto">
-            {revenueRisk.at_risk_shipments.map((r: any) => (
-              <div key={r.shipment_id} className="glass-card px-3 py-2 border-l-2 border-red-500/40">
-                <div className="flex justify-between text-xs font-mono">
-                  <span className="text-red-400 font-bold">{r.shipment_id}</span>
-                  <span className="text-red-300">-${r.penalty_usd}</span>
-                </div>
-                <div className="text-[10px] text-slate-500 mt-0.5">{r.destination} · {r.delay_days}d delay · SLA {r.sla_penalty_pct}%</div>
-                <div className="text-[10px] text-orange-400">{r.delay_reason}</div>
-              </div>
-            ))}
-          </div>
-          <button onClick={() => setRevenueRisk(null)}
-            className="mt-2 text-[10px] text-slate-600 hover:text-slate-400 font-mono">
-            Dismiss
-          </button>
-        </div>
-      )}
-
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-5">
         {/* Map */}
         <div className="xl:col-span-3">
@@ -202,7 +141,10 @@ export default function LiveTracking() {
               </div>
             ) : (
               <MapContainer center={[20, 0]} zoom={2} style={{ height: 'calc(100% - 38px)', width: '100%' }} zoomControl>
-                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="© OpenStreetMap" />
+                <TileLayer
+                  url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+                />
                 <AnimatedMarkers shipments={shipments} />
               </MapContainer>
             )}
@@ -260,6 +202,39 @@ export default function LiveTracking() {
                       <div>Carrier: <span className="text-slate-300">{s.carrier}</span></div>
                       <div>Priority: <span className="text-purple-400">P{s.priority}</span></div>
                       {s.delay_reason && <div className="col-span-2 text-orange-400">⚠ {s.delay_reason}</div>}
+                      {/* Real weather widget */}
+                      {weather && (
+                        <div className="col-span-2 mt-2 p-2 rounded-lg border border-cyan-500/15"
+                          style={{ background: 'rgba(0,229,255,0.04)' }}>
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <Cloud size={9} className="text-cyan-400" />
+                            <span className="text-[9px] uppercase tracking-widest text-cyan-400 font-semibold">Live Weather — Origin</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">{weather.icon}</span>
+                            <div>
+                              <div className="text-[11px] font-semibold text-white">{weather.condition}</div>
+                              <div className="text-[9px] text-slate-500">
+                                {weather.temperature !== null ? `${weather.temperature}°C` : ''}{weather.temperature !== null && weather.wind_speed ? ' · ' : ''}{weather.wind_speed ? `${weather.wind_speed}km/h wind` : ''}
+                              </div>
+                            </div>
+                            {weather.delay_factor > 0 && (
+                              <div className="ml-auto text-right">
+                                <div className="text-[9px] text-slate-500">Delay impact</div>
+                                <div className="text-[11px] font-bold"
+                                  style={{ color: weather.delay_impact === 'HIGH' ? '#ef4444' : weather.delay_impact === 'MEDIUM' ? '#fbbf24' : '#00ff87' }}>
+                                  {weather.delay_impact}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          {weather.delay_factor > 0.1 && (
+                            <div className="text-[9px] text-orange-400 mt-1">
+                              ⚠ Weather may add ~{Math.round(weather.delay_factor * 100)}% delay risk
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

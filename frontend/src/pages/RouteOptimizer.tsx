@@ -1,13 +1,12 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet'
 import L from 'leaflet'
-import { Plus, Trash2, Route, TrendingDown, DollarSign, Clock, Zap, Download, Search } from 'lucide-react'
+import { Plus, Trash2, Route, TrendingDown, Zap, Search } from 'lucide-react'
 import { optimizeRoutes, optimizeRoutesRoad, geocode } from '../services/api'
 import type { RouteResult } from '../types'
 import { SectionHeader, Spinner, ProgressBar } from '../components/ui'
 
-// Custom Leaflet icons
 const makeIcon = (color: string, priority: number) => L.divIcon({
   className: '',
   html: `<div style="background:${color};width:${10 + priority * 3}px;height:${10 + priority * 3}px;border-radius:50%;border:2px solid white;box-shadow:0 0 8px ${color}aa"></div>`,
@@ -46,14 +45,21 @@ const randomStop = (): StopInput => ({
 })
 
 export default function RouteOptimizer() {
-  const [stops, setStops] = useState<StopInput[]>([randomStop(), randomStop(), randomStop(), randomStop(), randomStop()])
+  const [stops, setStops] = useState<StopInput[]>([
+    randomStop(), randomStop(), randomStop(), randomStop(), randomStop(),
+  ])
   const [numVehicles, setNumVehicles] = useState(3)
   const [depotLat, setDepotLat] = useState(40.7128)
   const [depotLon, setDepotLon] = useState(-74.006)
   const [result, setResult] = useState<RouteResult | null>(null)
+  // Road routing toggle
+  const [roadMode, setRoadMode] = useState(false)
+  // Address geocoding
+  const [addressQuery, setAddressQuery] = useState('')
+  const [geoResults, setGeoResults] = useState<any[]>([])
 
   const { mutate, isPending } = useMutation({
-    mutationFn: () => optimizeRoutes({
+    mutationFn: () => (roadMode ? optimizeRoutesRoad : optimizeRoutes)({
       shipments: stops.map(s => ({ ...s })),
       num_vehicles: numVehicles,
       depot_lat: depotLat,
@@ -67,14 +73,41 @@ export default function RouteOptimizer() {
   const updateStop = (id: string, key: keyof StopInput, val: any) =>
     setStops(s => s.map(x => x.id === id ? { ...x, [key]: val } : x))
 
+  const handleGeoSearch = async () => {
+    if (!addressQuery.trim()) return
+    try {
+      const res = await geocode(addressQuery)
+      setGeoResults(res)
+    } catch {
+      setGeoResults([])
+    }
+  }
+
+  const addGeoStop = (r: any) => {
+    setStops(s => [...s, {
+      id: Math.random().toString(36).slice(2, 7),
+      lat: r.lat,
+      lon: r.lon,
+      name: r.display_name.slice(0, 30),
+      priority: 2,
+      weight_kg: 100,
+    }])
+    setGeoResults([])
+    setAddressQuery('')
+  }
+
   return (
     <div className="space-y-5 max-w-[1400px]">
-      <SectionHeader title="Route Optimizer" subtitle="Multi-vehicle VRP solved with Google OR-Tools / greedy heuristic — minimize distance, time & cost" />
+      <SectionHeader
+        title="Route Optimizer"
+        subtitle="Multi-vehicle VRP solved with Google OR-Tools / greedy heuristic — minimize distance, time & cost"
+      />
 
       <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
         {/* Controls */}
         <div className="xl:col-span-2 space-y-4">
-          {/* Config */}
+
+          {/* Fleet Configuration */}
           <div className="glass-card p-5">
             <div className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
               <Route size={14} className="text-cyan-400" /> Fleet Configuration
@@ -82,24 +115,79 @@ export default function RouteOptimizer() {
             <div className="grid grid-cols-3 gap-3 mb-4">
               <div>
                 <label className="stat-label block mb-1.5">Vehicles</label>
-                <input type="number" value={numVehicles} onChange={e => setNumVehicles(Number(e.target.value))}
+                <input type="number" value={numVehicles}
+                  onChange={e => setNumVehicles(Number(e.target.value))}
                   min={1} max={10} className="input-field" />
               </div>
               <div>
                 <label className="stat-label block mb-1.5">Depot Lat</label>
-                <input type="number" value={depotLat} onChange={e => setDepotLat(Number(e.target.value))}
+                <input type="number" value={depotLat}
+                  onChange={e => setDepotLat(Number(e.target.value))}
                   step={0.0001} className="input-field" />
               </div>
               <div>
                 <label className="stat-label block mb-1.5">Depot Lon</label>
-                <input type="number" value={depotLon} onChange={e => setDepotLon(Number(e.target.value))}
+                <input type="number" value={depotLon}
+                  onChange={e => setDepotLon(Number(e.target.value))}
                   step={0.0001} className="input-field" />
               </div>
             </div>
-            <button className="btn-primary w-full flex items-center justify-center gap-2"
-              onClick={() => mutate()} disabled={isPending || stops.length === 0}>
-              {isPending ? <><Spinner size={15} color="#020510" /> Optimizing…</> : <><Zap size={14} /> Optimize Routes</>}
+
+            <button
+              className="btn-primary w-full flex items-center justify-center gap-2"
+              onClick={() => mutate()}
+              disabled={isPending || stops.length === 0}
+            >
+              {isPending
+                ? <><Spinner size={15} color="#020510" /> Optimizing…</>
+                : <><Zap size={14} /> Optimize Routes</>}
             </button>
+
+            {/* GPS / Road routing toggle */}
+            <div className="flex items-center justify-between mt-4 px-1">
+              <div>
+                <div className="text-xs font-semibold text-white">Road Routing Mode</div>
+                <div className="text-[10px] text-slate-500 font-mono">
+                  {roadMode ? '🛣️ Following real roads (ORS)' : '📏 Straight-line distance'}
+                </div>
+              </div>
+              <button
+                onClick={() => setRoadMode(r => !r)}
+                className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${roadMode ? 'bg-cyan-500' : 'bg-slate-700'}`}
+              >
+                <div className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform duration-200 ${roadMode ? 'translate-x-5' : ''}`} />
+              </button>
+            </div>
+          </div>
+
+          {/* Address search */}
+          <div className="glass-card p-4">
+            <div className="text-xs font-semibold text-white mb-2 flex items-center gap-2">
+              <Search size={13} className="text-cyan-400" /> Search Address
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={addressQuery}
+                onChange={e => setAddressQuery(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleGeoSearch() }}
+                placeholder="e.g. Shibuya, Tokyo"
+                className="input-field flex-1 text-xs"
+              />
+              <button className="btn-ghost text-xs px-3" onClick={handleGeoSearch}>Go</button>
+            </div>
+            {geoResults.length > 0 && (
+              <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
+                {geoResults.slice(0, 4).map((r, i) => (
+                  <button
+                    key={i}
+                    className="w-full text-left text-[10px] font-mono text-slate-400 hover:text-cyan-400 px-2 py-1 rounded glass-card truncate"
+                    onClick={() => addGeoStop(r)}
+                  >
+                    + {r.display_name.slice(0, 60)}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Stops list */}
@@ -111,11 +199,14 @@ export default function RouteOptimizer() {
               </button>
             </div>
             <div className="space-y-2 max-h-80 overflow-y-auto">
-              {stops.map((s, idx) => (
+              {stops.map(s => (
                 <div key={s.id} className="glass-card p-3 fade-in-up">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-mono font-semibold text-cyan-400">{s.name}</span>
-                    <button onClick={() => removeStop(s.id)} className="text-slate-600 hover:text-red-400 transition-colors">
+                    <button
+                      onClick={() => removeStop(s.id)}
+                      className="text-slate-600 hover:text-red-400 transition-colors"
+                    >
                       <Trash2 size={12} />
                     </button>
                   </div>
@@ -134,7 +225,8 @@ export default function RouteOptimizer() {
                     </div>
                     <div>
                       <span className="text-slate-600">Priority</span>
-                      <select value={s.priority} onChange={e => updateStop(s.id, 'priority', Number(e.target.value))}
+                      <select value={s.priority}
+                        onChange={e => updateStop(s.id, 'priority', Number(e.target.value))}
                         className="input-field mt-0.5 text-[11px] py-1 px-2">
                         <option value={1}>Low</option>
                         <option value={2}>Med</option>
@@ -155,41 +247,81 @@ export default function RouteOptimizer() {
 
           {/* Savings */}
           {result && (
-            <div className="glass-card p-5 space-y-3 fade-in-up" style={{ border: '1px solid rgba(0,255,135,0.2)' }}>
+            <div className="glass-card p-5 space-y-3 fade-in-up"
+              style={{ border: '1px solid rgba(0,255,135,0.2)' }}>
               <div className="text-sm font-semibold text-neon-green mb-1 flex items-center gap-2">
                 <TrendingDown size={14} /> Optimization Savings
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <div className="stat-label">Distance Saved</div>
-                  <div className="text-xl font-bold font-mono text-neon-green">{result.savings.distance_saved_km} km</div>
+                  <div className="text-xl font-bold font-mono text-neon-green">
+                    {result.savings.distance_saved_km} km
+                  </div>
                 </div>
                 <div>
                   <div className="stat-label">Time Saved</div>
-                  <div className="text-xl font-bold font-mono text-cyan-400">{result.savings.time_saved_hours}h</div>
+                  <div className="text-xl font-bold font-mono text-cyan-400">
+                    {result.savings.time_saved_hours}h
+                  </div>
                 </div>
                 <div>
                   <div className="stat-label">Cost Saved</div>
-                  <div className="text-xl font-bold font-mono text-purple-400">${result.savings.cost_saved_usd}</div>
+                  <div className="text-xl font-bold font-mono text-purple-400">
+                    ${result.savings.cost_saved_usd}
+                  </div>
                 </div>
                 <div>
                   <div className="stat-label">Improvement</div>
-                  <div className="text-xl font-bold font-mono text-yellow-400">{result.savings.improvement_pct}%</div>
+                  <div className="text-xl font-bold font-mono text-yellow-400">
+                    {result.savings.improvement_pct}%
+                  </div>
+                </div>
+
+                {/* CO₂ panel */}
+                <div className="col-span-2 glass-card p-3 flex items-center gap-3"
+                  style={{ border: '1px solid rgba(0,255,135,0.2)' }}>
+                  <span className="text-2xl">🌱</span>
+                  <div>
+                    <div className="stat-label">CO₂ Emissions Prevented</div>
+                    <div className="text-xl font-bold font-mono text-neon-green">
+                      {result.savings.co2_saved_kg > 0
+                        ? `${result.savings.co2_saved_kg} kg`
+                        : `${Math.abs(result.savings.co2_saved_kg)} kg extra`}
+                    </div>
+                    <div className="text-[10px] text-slate-500 font-mono">
+                      Based on 1.02 kg CO₂/km diesel avg
+                    </div>
+                  </div>
                 </div>
               </div>
+
               <div className="text-[10px] font-mono text-slate-600 border-t border-white/5 pt-2">
                 Algorithm: {result.algorithm}
+                {result.road_routing_note && (
+                  <span className="text-yellow-600 ml-2">⚠ {result.road_routing_note}</span>
+                )}
               </div>
+
               <div className="space-y-2">
                 {result.stats.route_breakdown.map(r => (
                   <div key={r.vehicle_id} className="flex items-center gap-3">
-                    <div className="text-xs font-mono text-slate-400 w-16" style={{ color: COLORS[(r.vehicle_id - 1) % COLORS.length] }}>
+                    <div className="text-xs font-mono w-16"
+                      style={{ color: COLORS[(r.vehicle_id - 1) % COLORS.length] }}>
                       V-{r.vehicle_id}
                     </div>
-                    <ProgressBar value={r.distance_km} max={result.naive_stats.total_distance_km}
-                      color={COLORS[(r.vehicle_id - 1) % COLORS.length]} showLabel={false} />
-                    <div className="text-[11px] font-mono text-slate-400 w-16 text-right">{r.distance_km}km</div>
-                    <div className="text-[11px] font-mono text-slate-500 w-10">{r.num_stops}🚦</div>
+                    <ProgressBar
+                      value={r.distance_km}
+                      max={result.naive_stats.total_distance_km}
+                      color={COLORS[(r.vehicle_id - 1) % COLORS.length]}
+                      showLabel={false}
+                    />
+                    <div className="text-[11px] font-mono text-slate-400 w-16 text-right">
+                      {r.distance_km}km
+                    </div>
+                    <div className="text-[11px] font-mono text-slate-500 w-10">
+                      {r.num_stops}🚦
+                    </div>
                   </div>
                 ))}
               </div>
@@ -202,7 +334,9 @@ export default function RouteOptimizer() {
           <div className="glass-card overflow-hidden" style={{ height: '680px' }}>
             <div className="px-4 py-3 border-b border-cyan-500/10 flex items-center justify-between">
               <span className="text-xs font-mono text-slate-400">
-                {result ? `${result.stats.vehicles_used} routes plotted · ${result.stats.total_distance_km} km total` : 'Configure stops and optimize to see routes'}
+                {result
+                  ? `${result.stats.vehicles_used} routes plotted · ${result.stats.total_distance_km} km total`
+                  : 'Configure stops and optimize to see routes'}
               </span>
               {result && (
                 <div className="flex items-center gap-3 text-xs font-mono">
@@ -215,24 +349,29 @@ export default function RouteOptimizer() {
                 </div>
               )}
             </div>
+
             <MapContainer
               center={[39.5, -98.0]} zoom={4}
               style={{ height: 'calc(100% - 40px)', width: '100%' }}
-              zoomControl={false}>
+              zoomControl={false}
+            >
               <TileLayer
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 attribution="© OpenStreetMap"
               />
               <MapBounds result={result} />
 
-              {/* Depot */}
+              {/* Depot marker */}
               <Marker position={[depotLat, depotLon]} icon={depotIcon}>
                 <Popup>
-                  <div className="font-mono text-sm"><b>🏭 Main Warehouse (Depot)</b><br />{depotLat.toFixed(4)}, {depotLon.toFixed(4)}</div>
+                  <div className="font-mono text-sm">
+                    <b>🏭 Main Warehouse (Depot)</b><br />
+                    {depotLat.toFixed(4)}, {depotLon.toFixed(4)}
+                  </div>
                 </Popup>
               </Marker>
 
-              {/* Stops (before optimization) */}
+              {/* Unoptimized stops */}
               {!result && stops.map(s => (
                 <Marker key={s.id} position={[s.lat, s.lon]} icon={makeIcon('#a78bfa', s.priority)}>
                   <Popup>
@@ -248,16 +387,32 @@ export default function RouteOptimizer() {
               {/* Optimized routes */}
               {result?.routes.map((route, ri) => {
                 const color = route.color || COLORS[ri % COLORS.length]
-                const pts: [number, number][] = route.stops.map(s => [s.lat, s.lon])
+                // Use road polyline when available and roadMode is on, otherwise straight lines
+                const straightPts: [number, number][] = route.stops.map(s => [s.lat, s.lon])
+                const positions: [number, number][] =
+                  roadMode && route.road_polyline && route.road_polyline.length > 0
+                    ? route.road_polyline as [number, number][]
+                    : straightPts
+
                 return (
                   <div key={ri}>
-                    <Polyline positions={pts} color={color} weight={3} opacity={0.85}
-                       />
+                    <Polyline
+                      positions={positions}
+                      color={color}
+                      weight={3}
+                      opacity={0.85}
+                      dashArray={roadMode ? undefined : ri > 0 ? '8 4' : undefined}
+                    />
                     {route.stops.slice(1, -1).map((s, si) => (
-                      <Marker key={`${ri}-${si}`} position={[s.lat, s.lon]} icon={makeIcon(color, (s as any).priority || 1)}>
+                      <Marker
+                        key={`${ri}-${si}`}
+                        position={[s.lat, s.lon]}
+                        icon={makeIcon(color, (s as any).priority || 1)}
+                      >
                         <Popup>
                           <div className="font-mono text-sm">
-                            <b>Stop {si + 1}</b><br />{s.name || s.id}<br />
+                            <b>Stop {si + 1}</b><br />
+                            {s.name || s.id}<br />
                             Vehicle {route.vehicle_id}
                           </div>
                         </Popup>
