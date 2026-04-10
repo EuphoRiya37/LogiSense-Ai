@@ -50,13 +50,17 @@ class RouteOptimizer:
         opt_stats = self._calc_stats(routes, dist_matrix)
         naive_stats = self._calc_stats(naive, dist_matrix)
 
+        CO2_KG_PER_KM = 1.02   # avg diesel truck (DEFRA 2023)
+
+        distance_diff = naive_stats['total_distance_km'] - opt_stats['total_distance_km']
+
         savings = {
-            'distance_saved_km': round(naive_stats['total_distance_km'] - opt_stats['total_distance_km'], 2),
+            'distance_saved_km': round(distance_diff, 2),
             'time_saved_hours': round(naive_stats['total_time_hours'] - opt_stats['total_time_hours'], 2),
-            'cost_saved_usd': round((naive_stats['total_distance_km'] - opt_stats['total_distance_km']) * self.COST_PER_KM, 2),
+            'cost_saved_usd': round(distance_diff * self.COST_PER_KM, 2),
+            'co2_saved_kg': round(distance_diff * CO2_KG_PER_KM, 2),
             'improvement_pct': round(
-                (naive_stats['total_distance_km'] - opt_stats['total_distance_km']) /
-                max(naive_stats['total_distance_km'], 1) * 100, 1
+                distance_diff / max(naive_stats['total_distance_km'], 1) * 100, 1
             ),
         }
 
