@@ -11,7 +11,5 @@ class Settings:
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
     HOST: str = os.getenv("HOST", "0.0.0.0")
     PORT: int = int(os.getenv("PORT", "8000"))
-    ORS_API_KEY: str = os.getenv("eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjljMzkyNDZhM2U1MzQ2MDViZTZjZDQxODFlZWJlYWU2IiwiaCI6Im11cm11cjY0In0=", "")
-    OPENWEATHER_API_KEY: str = os.getenv("9161e3011183004cd42f7f4fd9813e09", "")
 
 settings = Settings()
