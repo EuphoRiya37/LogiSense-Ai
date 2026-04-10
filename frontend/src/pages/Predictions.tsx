@@ -215,7 +215,17 @@ function SinglePredict() {
               <BarChart data={fimpData} layout="vertical" barSize={10}>
                 <XAxis type="number" tick={{ fill:'#64748b', fontSize:9, fontFamily:'JetBrains Mono' }} axisLine={false} tickLine={false} />
                 <YAxis type="category" dataKey="name" width={120} tick={{ fill:'#94a3b8', fontSize:10, fontFamily:'JetBrains Mono' }} axisLine={false} tickLine={false} />
-                <Tooltip content={({ active, payload }) => active&&payload?.length ? <div className="glass-card px-3 py-1 text-xs font-mono text-cyan-400">{payload[0].value?.toFixed(4)}</div> : null} />
+                <Tooltip
+                  content={({ active, payload }) =>
+                    active && payload?.length ? (
+                      <div className="glass-card px-3 py-1 text-xs font-mono text-cyan-400">
+                        {typeof payload[0].value === 'number'
+                          ? payload[0].value.toFixed(4)
+                          : String(payload[0].value)}
+                      </div>
+                    ) : null
+                  }
+                />
                 <Bar dataKey="value" radius={[0,4,4,0]}>
                   {fimpData.map((_:any, i:number) => <Cell key={i} fill={`rgba(0,229,255,${0.9-i*0.09})`} />)}
                 </Bar>

@@ -187,8 +187,10 @@ export default function Dashboard() {
         <div className="glass-card p-5">
           <div className="stat-label mb-4">Delay Rate by Region</div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {Object.entries(s.delay_by_region).sort((a, b) => b[1] - a[1]).map(([region, rate], i) => {
-              const pct = rate * 100
+            {(Object.entries(s.delay_by_region as Record<string, number>))
+              .sort((a, b) => Number(b[1]) - Number(a[1]))
+              .map(([region, rate], i) => {
+              const pct = Number(rate) * 100
               const color = pct > 50 ? '#ef4444' : pct > 35 ? '#ff6b35' : pct > 20 ? '#fbbf24' : '#00ff87'
               return (
                 <div key={i} className="glass-card p-3">

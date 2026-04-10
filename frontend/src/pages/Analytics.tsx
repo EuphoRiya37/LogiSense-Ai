@@ -238,8 +238,8 @@ export default function Analytics() {
             <div className="glass-card p-5">
               <div className="stat-label mb-4">Day of Week × Delay Rate Heatmap</div>
               <div className="flex flex-col gap-2">
-                {Object.entries(s.delay_by_dow).map(([day, rate], i) => {
-                  const pct = rate * 100
+                {(Object.entries(s.delay_by_dow as Record<string, number>)).map(([day, rate], i) => {
+                  const pct = Number(rate) * 100
                   const intensity = Math.min(1, pct / 50)
                   const color = `rgba(255,107,53,${0.2 + intensity * 0.8})`
                   return (
