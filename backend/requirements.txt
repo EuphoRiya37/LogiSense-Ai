@@ -1,10 +1,13 @@
 fastapi
 httpx
+joblib
 numpy
 ortools
 pandas
 python-dotenv
+python-multipart
 scikit-learn
 uvicorn[standard]
 websockets
 xgboost
+ 
