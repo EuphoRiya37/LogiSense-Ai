@@ -1,20 +1,22 @@
 import { BrowserRouter, Routes, Route, NavLink, useLocation } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { LayoutDashboard, Brain, Route as RouteIcon, Radio, BarChart3, Package, Zap, Truck } from 'lucide-react'
+import { LayoutDashboard, Brain, Route as RouteIcon, Radio, BarChart3, Package, Zap, Truck, Shield } from 'lucide-react'
 import Dashboard from './pages/Dashboard'
 import Predictions from './pages/Predictions'
 import RouteOptimizer from './pages/RouteOptimizer'
 import LiveTracking from './pages/LiveTracking'
 import Analytics from './pages/Analytics'
 import FleetAllocation from './pages/FleetAllocation'
+import CargoIntelligence from './pages/CargoIntelligence'
 
 const NAV = [
-  { to: '/',           icon: LayoutDashboard, label: 'Dashboard'      },
-  { to: '/predict',    icon: Brain,           label: 'Predictions'    },
-  { to: '/routes',     icon: RouteIcon,       label: 'Route Optimizer'},
-  { to: '/fleet',      icon: Truck,           label: 'Fleet Allocation'},
-  { to: '/tracking',   icon: Radio,           label: 'Live Tracking'  },
-  { to: '/analytics',  icon: BarChart3,       label: 'Analytics'      },
+  { to: '/',          icon: LayoutDashboard, label: 'Dashboard'       },
+  { to: '/predict',   icon: Brain,           label: 'Predictions'     },
+  { to: '/routes',    icon: RouteIcon,       label: 'Route Optimizer' },
+  { to: '/fleet',     icon: Truck,           label: 'Fleet Allocation'},
+  { to: '/cargo',     icon: Shield,          label: 'Cargo Intel'     },
+  { to: '/tracking',  icon: Radio,           label: 'Live Tracking'   },
+  { to: '/analytics', icon: BarChart3,       label: 'Analytics'       },
 ]
 
 function Sidebar() {
@@ -40,21 +42,17 @@ function Sidebar() {
       <nav className="flex-1 px-3 py-4 space-y-1">
         {NAV.map(({ to, icon: Icon, label }) => (
           <NavLink key={to} to={to} end={to === '/'} className={({ isActive }) =>
-            `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group
-            ${isActive
-              ? 'text-white'
-              : 'text-slate-500 hover:text-slate-300'}`
+            `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 group relative
+            ${isActive ? 'text-white' : 'text-slate-500 hover:text-slate-300'}`
           }>
             {({ isActive }) => (
               <>
                 {isActive && (
-                  <div className="absolute left-3 w-[3px] h-6 rounded-full bg-cyan-400"
+                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-full bg-cyan-400"
                     style={{ boxShadow: '0 0 8px rgba(0,229,255,0.8)' }} />
                 )}
                 <div className={`w-7 h-7 rounded-md flex items-center justify-center transition-all duration-200
-                  ${isActive
-                    ? 'bg-cyan-400/15 text-cyan-400'
-                    : 'text-slate-600 group-hover:text-slate-400 group-hover:bg-white/5'}`}>
+                  ${isActive ? 'bg-cyan-400/15 text-cyan-400' : 'text-slate-600 group-hover:text-slate-400 group-hover:bg-white/5'}`}>
                   <Icon size={15} />
                 </div>
                 <span className="tracking-wide">{label}</span>
@@ -107,6 +105,7 @@ export default function App() {
               <Route path="/predict"   element={<Predictions />} />
               <Route path="/routes"    element={<RouteOptimizer />} />
               <Route path="/fleet"     element={<FleetAllocation />} />
+              <Route path="/cargo"     element={<CargoIntelligence />} />
               <Route path="/tracking"  element={<LiveTracking />} />
               <Route path="/analytics" element={<Analytics />} />
             </Routes>
