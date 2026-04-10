@@ -2,12 +2,12 @@ import asyncio
 import logging
 import os
 import sys
-from contextlib import asynccontextmanager
-from typing import List, Optional, Any, Dict
-import io
-import csv
 import random
 import hashlib
+import io
+import csv
+from contextlib import asynccontextmanager
+from typing import List, Optional, Any, Dict
 
 import httpx
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
@@ -26,10 +26,19 @@ from data.weather import (
     get_weather_eta_adjustment,
 )
 from data.insights import generate_insights
+from data.cargo_intelligence import analyze_cargo, CARGO_PROFILES, VEHICLE_CAPABILITIES
+from data.incidents import (
+    get_active_incidents,
+    tick_incidents,
+    inject_incident,
+    check_shipment_affected,
+)
 from ml.eta_model import ETAPredictor
 from ml.delay_model import DelayPredictor
 from optimization.route_optimizer import RouteOptimizer
 from optimization.shipment_allocator import ShipmentAllocator
+from optimization.multimodal import compare_multimodal
+from optimization.sla_scorer import score_sla_risk
 from websocket.manager import ConnectionManager
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
@@ -87,11 +96,32 @@ async def lifespan(app: FastAPI):
         while True:
             await asyncio.sleep(3)
             try:
+                incidents = tick_incidents(p_new=0.08, p_expire=0.05)
+
+                if simulator:
+                    ships = simulator.tick()
+                    for s in ships:
+                        nearby = check_shipment_affected(s, incidents)
+                        if nearby and s["status"] == "in_transit" and random.random() < 0.25:
+                            s["status"] = "delayed"
+                            s["status_color"] = "#ff6b35"
+                            s["delay_reason"] = f"Incident: {nearby[0]['description'][:50]}"
+
+                # Enrich incidents with affected shipments
+                enriched_incidents = []
+                for inc in incidents:
+                    affected = [
+                        s["id"] for s in (simulator.shipments if simulator else [])
+                        if check_shipment_affected(s, [inc])
+                    ]
+                    enriched_incidents.append({**inc, "affected_shipments": affected})
+
                 await ws_manager.broadcast({
                     "type": "tracking_update",
-                    "shipments": simulator.tick(),
-                    "alerts": simulator.get_alerts(),
-                    "kpis": simulator.get_kpis(),
+                    "shipments": simulator.shipments if simulator else [],
+                    "alerts": simulator.get_alerts() if simulator else [],
+                    "kpis": simulator.get_kpis() if simulator else {},
+                    "incidents": enriched_incidents,
                 })
             except asyncio.CancelledError:
                 break
@@ -99,7 +129,7 @@ async def lifespan(app: FastAPI):
                 logger.warning(f"Tracking loop error: {e}")
 
     _bg_task = asyncio.create_task(_tracking_loop())
-    logger.info("LogiSense AI ready - docs at http://localhost:8000/docs")
+    logger.info("LogiSense AI ready — docs at http://localhost:8000/docs")
     yield
 
     if _bg_task:
@@ -107,7 +137,7 @@ async def lifespan(app: FastAPI):
     logger.info("Shutdown complete")
 
 
-app = FastAPI(title="LogiSense AI", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="LogiSense AI", version="2.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -118,7 +148,8 @@ app.add_middleware(
 )
 
 
-# Schemas
+# ── Pydantic Schemas ───────────────────────────────────────────────────────────
+
 class ShipmentInput(BaseModel):
     shipping_mode: str = "Standard Class"
     scheduled_shipping_days: float = Field(5, ge=1, le=30)
@@ -175,10 +206,34 @@ class WhatIfRequest(BaseModel):
     scenarios: List[Dict[str, Any]]
 
 
-# Core endpoints
+class CargoAnalysisRequest(BaseModel):
+    cargo_type: str = "standard"
+    weight_kg: float = Field(100.0, gt=0)
+    distance_km: float = Field(100.0, gt=0)
+    terrain: str = "highway"
+    dispatch_time: Optional[str] = None
+    available_vehicles: Optional[List[str]] = None
+
+
+class MultimodalRequest(BaseModel):
+    distance_km: float = Field(500.0, gt=0)
+    weight_kg: float = Field(1000.0, gt=0)
+    cargo_type: str = "standard"
+    urgency: str = "medium"
+    max_transit_hours: Optional[float] = None
+
+
+class SLARequest(BaseModel):
+    shipment: ShipmentInput
+    cargo_type: str = "standard"
+    weather_delay_days: float = 0.0
+
+
+# ── Core endpoints ─────────────────────────────────────────────────────────────
+
 @app.get("/")
 def health():
-    return {"status": "ok", "app": settings.APP_NAME, "version": settings.VERSION}
+    return {"status": "ok", "app": settings.APP_NAME, "version": "2.0.0"}
 
 
 @app.get("/api/status")
@@ -234,7 +289,9 @@ def demand_forecast():
             return []
         monthly = df.groupby(["order_year", "order_month"], observed=False).size().reset_index(name="count")
         monthly = monthly.sort_values(["order_year", "order_month"])
-        monthly["label"] = monthly["order_year"].astype(str) + "-" + monthly["order_month"].astype(str).str.zfill(2)
+        monthly["label"] = (
+            monthly["order_year"].astype(str) + "-" + monthly["order_month"].astype(str).str.zfill(2)
+        )
         counts = monthly["count"].tolist()
         if len(counts) < 4:
             return []
@@ -305,11 +362,15 @@ def get_insights_route():
         raise HTTPException(503, "Data not loaded")
     return generate_insights(
         data_loader.get_summary_stats(),
-        {"eta_model": eta_predictor.metrics if eta_predictor else {}, "delay_model": delay_predictor.metrics if delay_predictor else {}},
+        {
+            "eta_model": eta_predictor.metrics if eta_predictor else {},
+            "delay_model": delay_predictor.metrics if delay_predictor else {},
+        },
     )
 
 
-# Prediction endpoints
+# ── Prediction endpoints ───────────────────────────────────────────────────────
+
 @app.post("/api/predict/full")
 def predict_full(payload: ShipmentInput):
     if not eta_predictor or not delay_predictor:
@@ -352,9 +413,14 @@ def predict_batch(req: BatchPredictRequest):
     for s in req.shipments:
         d = s.model_dump()
         try:
-            results.append({**eta_predictor.predict(d), **delay_predictor.predict(d),
-                            "shipping_mode": d.get("shipping_mode"), "order_region": d.get("order_region"),
-                            "order_month": d.get("order_month"), "error": None})
+            results.append({
+                **eta_predictor.predict(d),
+                **delay_predictor.predict(d),
+                "shipping_mode": d.get("shipping_mode"),
+                "order_region": d.get("order_region"),
+                "order_month": d.get("order_month"),
+                "error": None,
+            })
         except Exception as e:
             results.append({"error": str(e)})
     return {"results": results, "count": len(results)}
@@ -369,8 +435,12 @@ def predict_whatif(req: WhatIfRequest):
     for sc in req.scenarios[:6]:
         variant = {**base_d, **sc.get("changes", {})}
         try:
-            results.append({"label": sc.get("label", "Scenario"), **eta_predictor.predict(variant),
-                            **delay_predictor.predict(variant), "changes": sc.get("changes", {})})
+            results.append({
+                "label": sc.get("label", "Scenario"),
+                **eta_predictor.predict(variant),
+                **delay_predictor.predict(variant),
+                "changes": sc.get("changes", {}),
+            })
         except Exception as e:
             results.append({"label": sc.get("label", "Scenario"), "error": str(e)})
     return {"scenarios": results}
@@ -389,9 +459,16 @@ def compare_modes(payload: ShipmentInput):
         try:
             eta = eta_predictor.predict(d)
             delay = delay_predictor.predict(d)
-            results.append({"mode": mode, "eta_days": eta["eta_days"], "confidence_lower": eta["confidence_lower"],
-                            "confidence_upper": eta["confidence_upper"], "delay_probability": delay["delay_probability"],
-                            "risk_level": delay["risk_level"], "risk_color": delay["risk_color"], "extra_cost_usd": costs[mode]})
+            results.append({
+                "mode": mode,
+                "eta_days": eta["eta_days"],
+                "confidence_lower": eta["confidence_lower"],
+                "confidence_upper": eta["confidence_upper"],
+                "delay_probability": delay["delay_probability"],
+                "risk_level": delay["risk_level"],
+                "risk_color": delay["risk_color"],
+                "extra_cost_usd": costs[mode],
+            })
         except Exception as e:
             logger.warning(f"compare error {mode}: {e}")
     if not results:
@@ -403,16 +480,17 @@ def compare_modes(payload: ShipmentInput):
     day_save = round(current["eta_days"] - best["eta_days"], 1)
     cost_diff = best["extra_cost_usd"] - current["extra_cost_usd"]
     if day_save > 0.5 and cost_diff < 50:
-        rec = {"type": "UPGRADE", "message": f"Switch to {best['mode']} -> save {day_save}d at +${cost_diff}", "suggested_mode": best["mode"]}
+        rec = {"type": "UPGRADE", "message": f"Switch to {best['mode']} → save {day_save}d at +${cost_diff}", "suggested_mode": best["mode"]}
     elif current["delay_probability"] > 50:
         rs = round(current["delay_probability"] - safest["delay_probability"], 0)
-        rec = {"type": "RISK_REDUCE", "message": f"Use {safest['mode']} -> reduce delay risk by {rs:.0f}%", "suggested_mode": safest["mode"]}
+        rec = {"type": "RISK_REDUCE", "message": f"Use {safest['mode']} → reduce delay risk by {rs:.0f}%", "suggested_mode": safest["mode"]}
     else:
         rec = {"type": "OPTIMAL", "message": f"{payload.shipping_mode} is optimal", "suggested_mode": payload.shipping_mode}
     return {"modes": results, "current_mode": payload.shipping_mode, "recommendation": rec}
 
 
-# Optimization endpoints
+# ── Route optimization endpoints ───────────────────────────────────────────────
+
 @app.post("/api/optimize/routes")
 def optimize_routes(req: RouteRequest):
     return route_optimizer.optimize(
@@ -427,8 +505,13 @@ def optimize_routes(req: RouteRequest):
 @app.post("/api/optimize/routes/road")
 async def optimize_routes_road(req: RouteRequest):
     ships = [s.model_dump() for s in req.shipments]
-    result = route_optimizer.optimize(shipments=ships, num_vehicles=req.num_vehicles,
-                                      optimize_for=req.optimize_for, depot_lat=req.depot_lat, depot_lon=req.depot_lon)
+    result = route_optimizer.optimize(
+        shipments=ships,
+        num_vehicles=req.num_vehicles,
+        optimize_for=req.optimize_for,
+        depot_lat=req.depot_lat,
+        depot_lon=req.depot_lon,
+    )
     api_key = settings.ORS_API_KEY
     if api_key:
         for route in result.get("routes", []):
@@ -446,6 +529,17 @@ async def optimize_routes_road(req: RouteRequest):
     return result
 
 
+@app.post("/api/optimize/multimodal")
+def multimodal_compare(req: MultimodalRequest):
+    return compare_multimodal(
+        distance_km=req.distance_km,
+        weight_kg=req.weight_kg,
+        cargo_type=req.cargo_type,
+        urgency=req.urgency,
+        max_transit_hours=req.max_transit_hours,
+    )
+
+
 @app.post("/api/allocate")
 def allocate_shipments(req: AllocationRequest):
     return allocator.allocate(req.shipments)
@@ -454,29 +548,116 @@ def allocate_shipments(req: AllocationRequest):
 @app.post("/api/export/routes")
 def export_routes(req: RouteRequest):
     ships = [s.model_dump() for s in req.shipments]
-    result = route_optimizer.optimize(shipments=ships, num_vehicles=req.num_vehicles,
-                                      optimize_for=req.optimize_for, depot_lat=req.depot_lat, depot_lon=req.depot_lon)
+    result = route_optimizer.optimize(
+        shipments=ships,
+        num_vehicles=req.num_vehicles,
+        optimize_for=req.optimize_for,
+        depot_lat=req.depot_lat,
+        depot_lon=req.depot_lon,
+    )
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["vehicle_id", "stop_sequence", "stop_id", "stop_name", "lat", "lon", "priority", "weight_kg"])
     for route in result.get("routes", []):
         vehicle_id = route.get("vehicle_id")
         for idx, stop in enumerate(route.get("stops", []), start=1):
-            writer.writerow([vehicle_id, idx, stop.get("id"), stop.get("name"),
-                             stop.get("lat"), stop.get("lon"), stop.get("priority"), stop.get("weight_kg")])
+            writer.writerow([
+                vehicle_id, idx, stop.get("id"), stop.get("name"),
+                stop.get("lat"), stop.get("lon"), stop.get("priority"), stop.get("weight_kg"),
+            ])
     output.seek(0)
-    return StreamingResponse(iter([output.getvalue()]), media_type="text/csv",
-                             headers={"Content-Disposition": "attachment; filename=optimized_routes.csv"})
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=optimized_routes.csv"},
+    )
 
+
+# ── Cargo Intelligence endpoints ───────────────────────────────────────────────
+
+@app.get("/api/cargo/profiles")
+def get_cargo_profiles():
+    return {"profiles": CARGO_PROFILES, "vehicles": VEHICLE_CAPABILITIES}
+
+
+@app.post("/api/cargo/analyze")
+def cargo_analyze(req: CargoAnalysisRequest):
+    return analyze_cargo(
+        cargo_type=req.cargo_type,
+        weight_kg=req.weight_kg,
+        distance_km=req.distance_km,
+        terrain=req.terrain,
+        dispatch_time_iso=req.dispatch_time,
+        available_vehicles=req.available_vehicles,
+    )
+
+
+# ── SLA Risk endpoint ──────────────────────────────────────────────────────────
+
+@app.post("/api/sla/score")
+def score_sla(req: SLARequest):
+    if not eta_predictor or not delay_predictor:
+        raise HTTPException(503, "Models not ready")
+    d = req.shipment.model_dump()
+    eta_result = eta_predictor.predict(d)
+    delay_result = delay_predictor.predict(d)
+    sla = score_sla_risk(
+        shipment=d,
+        eta_days=eta_result["eta_days"],
+        delay_probability=delay_result["delay_probability"],
+        weather_delay_days=req.weather_delay_days,
+        cargo_type=req.cargo_type,
+    )
+    return {**eta_result, **delay_result, "sla": sla}
+
+
+# ── Incident Management endpoints ──────────────────────────────────────────────
+
+@app.get("/api/incidents")
+def get_incidents():
+    incidents = get_active_incidents()
+    enriched = []
+    for inc in incidents:
+        if simulator:
+            affected_ships = [
+                s["id"] for s in simulator.shipments
+                if check_shipment_affected(s, [inc])
+            ]
+            enriched.append({**inc, "affected_shipments": affected_ships})
+        else:
+            enriched.append(inc)
+    return {"incidents": enriched, "count": len(enriched)}
+
+
+@app.post("/api/incidents/inject")
+def inject_incident_endpoint(incident_type: Optional[str] = None):
+    incident = inject_incident(incident_type)
+    return {"incident": incident, "message": f"Incident {incident['id']} injected"}
+
+
+# ── Stress test endpoint ───────────────────────────────────────────────────────
 
 @app.post("/api/stress-test")
 def run_stress_test():
     if not simulator:
         raise HTTPException(503, "Simulator not ready")
-    return simulator.stress_test()
+    injected = 0
+    for s in simulator.shipments:
+        if s["status"] == "in_transit" and random.random() < 0.4:
+            s["status"] = "delayed"
+            s["status_color"] = "#ff6b35"
+            s["delay_reason"] = random.choice([
+                "Stress test: road closure",
+                "Stress test: customs hold",
+                "Stress test: vehicle breakdown",
+                "Stress test: weather event",
+            ])
+            injected += 1
+    return {"injected_delays": injected, "total_shipments": len(simulator.shipments)}
 
 
-# Weather endpoints
+# ── Weather endpoints ──────────────────────────────────────────────────────────
+
 WEATHER_CODES = {
     0: ("Clear sky", "☀️", 0.0), 1: ("Mainly clear", "🌤️", 0.0), 2: ("Partly cloudy", "⛅", 0.0),
     3: ("Overcast", "☁️", 0.05), 45: ("Fog", "🌫️", 0.15), 51: ("Light drizzle", "🌦️", 0.1),
@@ -488,9 +669,11 @@ WEATHER_CODES = {
 
 @app.get("/api/weather")
 async def get_weather(lat: float = 39.5, lon: float = -98.0):
-    url = (f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
-           f"&current=temperature_2m,precipitation,wind_speed_10m,weather_code,relative_humidity_2m"
-           f"&forecast_days=1&timezone=auto")
+    url = (
+        f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
+        f"&current=temperature_2m,precipitation,wind_speed_10m,weather_code,relative_humidity_2m"
+        f"&forecast_days=1&timezone=auto"
+    )
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             data = (await client.get(url)).json()
@@ -498,13 +681,20 @@ async def get_weather(lat: float = 39.5, lon: float = -98.0):
         wc = int(cur.get("weather_code", 0))
         desc, icon, df_val = WEATHER_CODES.get(wc, ("Unknown", "❓", 0.0))
         wind = float(cur.get("wind_speed_10m", 0))
-        if wind > 60: df_val += 0.3
-        elif wind > 40: df_val += 0.15
-        return {"temperature": cur.get("temperature_2m"), "precipitation": cur.get("precipitation"),
-                "wind_speed": wind, "humidity": cur.get("relative_humidity_2m"),
-                "condition": desc, "icon": icon,
-                "delay_factor": round(min(0.9, df_val), 2),
-                "delay_impact": "HIGH" if df_val > 0.3 else "MEDIUM" if df_val > 0.1 else "LOW"}
+        if wind > 60:
+            df_val += 0.3
+        elif wind > 40:
+            df_val += 0.15
+        return {
+            "temperature": cur.get("temperature_2m"),
+            "precipitation": cur.get("precipitation"),
+            "wind_speed": wind,
+            "humidity": cur.get("relative_humidity_2m"),
+            "condition": desc,
+            "icon": icon,
+            "delay_factor": round(min(0.9, df_val), 2),
+            "delay_impact": "HIGH" if df_val > 0.3 else "MEDIUM" if df_val > 0.1 else "LOW",
+        }
     except Exception as e:
         return {"condition": "Unavailable", "icon": "❓", "delay_factor": 0.0, "delay_impact": "LOW", "error": str(e)}
 
@@ -517,24 +707,33 @@ def weather_global():
 @app.get("/api/geocode")
 async def geocode(q: str):
     try:
-        async with httpx.AsyncClient(timeout=8.0, headers={"User-Agent": "LogiSenseAI/1.0"}) as client:
-            resp = await client.get("https://nominatim.openstreetmap.org/search",
-                                    params={"q": q, "format": "json", "limit": 5})
+        async with httpx.AsyncClient(timeout=8.0, headers={"User-Agent": "LogiSenseAI/2.0"}) as client:
+            resp = await client.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={"q": q, "format": "json", "limit": 5},
+            )
             results = resp.json()
-        return [{"display_name": r["display_name"], "lat": float(r["lat"]),
-                 "lon": float(r["lon"]), "type": r.get("type", "")} for r in results]
+        return [
+            {"display_name": r["display_name"], "lat": float(r["lat"]), "lon": float(r["lon"]), "type": r.get("type", "")}
+            for r in results
+        ]
     except Exception as e:
         raise HTTPException(500, f"Geocoding failed: {e}")
 
+
+# ── WebSocket ──────────────────────────────────────────────────────────────────
 
 @app.websocket("/ws/tracking")
 async def tracking_ws(ws: WebSocket):
     await ws_manager.connect(ws)
     try:
+        incidents = get_active_incidents()
         await ws_manager.send_personal(ws, {
             "type": "initial",
             "shipments": simulator.shipments if simulator else [],
             "kpis": simulator.get_kpis() if simulator else {},
+            "alerts": [],
+            "incidents": incidents,
         })
         while True:
             try:
