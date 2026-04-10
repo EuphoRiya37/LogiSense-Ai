@@ -472,10 +472,6 @@ def optimize_routes(req: RouteRequest):
 
 @app.post("/api/optimize/routes/road")
 async def optimize_routes_road(req: RouteRequest):
-    """
-    Same as /api/optimize/routes but also fetches actual road polylines
-    from OpenRouteService for each vehicle route.
-    """
     ships = [s.model_dump() for s in req.shipments]
     result = route_optimizer.optimize(
         shipments=ships,
@@ -502,7 +498,6 @@ async def optimize_routes_road(req: RouteRequest):
 
     return result
 
-<<<<<<< Updated upstream
 def stable_order_value(shipment_id: str) -> float:
     seed = int(hashlib.md5(shipment_id.encode()).hexdigest()[:8], 16)
     rng = random.Random(seed)
@@ -727,8 +722,7 @@ def optimize_routes(req: RouteRequest):
         shipments=[s.model_dump() for s in req.shipments],
         num_vehicles=req.num_vehicles, optimize_for=req.optimize_for,
         depot_lat=req.depot_lat, depot_lon=req.depot_lon)
-=======
->>>>>>> Stashed changes
+
 
 @app.post("/api/allocate")
 def allocate_shipments(req: AllocationRequest):
@@ -939,6 +933,32 @@ def export_routes(req: RouteRequest):
         iter([output.getvalue()]),
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=optimized_routes.csv"},
+    )
+
+# ── Cargo Intelligence ─────────────────────────────────────────────────────────
+from data.cargo_intelligence import analyze_cargo, CARGO_PROFILES, VEHICLE_CAPABILITIES
+
+class CargoAnalysisRequest(BaseModel):
+    cargo_type: str = "standard"
+    weight_kg: float = Field(100.0, gt=0)
+    distance_km: float = Field(100.0, gt=0)
+    terrain: str = "highway"
+    dispatch_time: Optional[str] = None
+    available_vehicles: Optional[List[str]] = None
+
+@app.get("/api/cargo/profiles")
+def get_cargo_profiles():
+    return {"profiles": CARGO_PROFILES, "vehicles": VEHICLE_CAPABILITIES}
+
+@app.post("/api/cargo/analyze")
+def cargo_analyze(req: CargoAnalysisRequest):
+    return analyze_cargo(
+        cargo_type=req.cargo_type,
+        weight_kg=req.weight_kg,
+        distance_km=req.distance_km,
+        terrain=req.terrain,
+        dispatch_time_iso=req.dispatch_time,
+        available_vehicles=req.available_vehicles,
     )
 
 

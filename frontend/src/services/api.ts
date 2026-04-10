@@ -25,6 +25,17 @@ export const exportRoutes = (payload: {
 }) =>
   api.post('/api/export/routes', { optimize_for: 'balanced', ...payload }, { responseType: 'blob' }).then(r => r.data)
 
+export const getCargoProfiles = () =>
+  api.get('/api/cargo/profiles').then(r => r.data)
+
+export const analyzeCargo = (payload: {
+  cargo_type: string
+  weight_kg: number
+  distance_km: number
+  terrain: string
+  dispatch_time?: string
+}) => api.post('/api/cargo/analyze', payload).then(r => r.data)
+
 export const predictFull = (payload: ShipmentInput): Promise<PredictionResult> =>
   api.post('/api/predict/full', payload).then(r => r.data);
 export const predictBatch = (shipments: ShipmentInput[]) =>
