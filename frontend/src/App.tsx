@@ -9,12 +9,12 @@ import Analytics from './pages/Analytics'
 import FleetAllocation from './pages/FleetAllocation'
 
 const NAV = [
-  { to: '/',           icon: LayoutDashboard, label: 'Dashboard'     },
-  { to: '/predict',    icon: Brain,           label: 'Predictions'   },
+  { to: '/',           icon: LayoutDashboard, label: 'Dashboard'      },
+  { to: '/predict',    icon: Brain,           label: 'Predictions'    },
   { to: '/routes',     icon: RouteIcon,       label: 'Route Optimizer'},
-  { to: '/tracking',   icon: Radio,           label: 'Live Tracking' },
-  { to: '/fleet', icon: Truck, label: 'Fleet Allocation'},
-  { to: '/analytics',  icon: BarChart3,       label: 'Analytics'     },
+  { to: '/fleet',      icon: Truck,           label: 'Fleet Allocation'},
+  { to: '/tracking',   icon: Radio,           label: 'Live Tracking'  },
+  { to: '/analytics',  icon: BarChart3,       label: 'Analytics'      },
 ]
 
 function Sidebar() {
@@ -103,10 +103,10 @@ export default function App() {
         <main className="ml-60 flex-1 flex flex-col overflow-hidden">
           <PageWrapper>
             <Routes>
-              <Route path="/fleet" element={<FleetAllocation />} />
               <Route path="/"          element={<Dashboard />} />
               <Route path="/predict"   element={<Predictions />} />
               <Route path="/routes"    element={<RouteOptimizer />} />
+              <Route path="/fleet"     element={<FleetAllocation />} />
               <Route path="/tracking"  element={<LiveTracking />} />
               <Route path="/analytics" element={<Analytics />} />
             </Routes>

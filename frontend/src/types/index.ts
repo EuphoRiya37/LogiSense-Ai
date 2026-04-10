@@ -22,13 +22,6 @@ export interface ShipmentInput {
   order_year?: number
 }
 
-export interface WeatherAdjustment {
-  weather_delay_days: number
-  weather_condition: string
-  weather_reason: string | null
-  icon: string
-}
-
 export interface ETAResult {
   eta_days: number
   confidence_lower: number
@@ -45,7 +38,12 @@ export interface DelayResult {
 }
 
 export interface PredictionResult extends ETAResult, DelayResult {
-  weather_adjustment?: WeatherAdjustment | null
+  weather_adjustment?: {
+    weather_delay_days: number
+    weather_condition: string
+    weather_reason: string | null
+    icon: string
+  } | null
 }
 
 export interface LiveShipment {
@@ -116,7 +114,7 @@ export interface RouteSavings {
   distance_saved_km: number
   time_saved_hours: number
   cost_saved_usd: number
-  co2_saved_kg?: number
+  co2_saved_kg: number
   improvement_pct: number
 }
 
