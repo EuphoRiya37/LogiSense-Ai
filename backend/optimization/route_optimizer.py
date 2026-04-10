@@ -17,8 +17,7 @@ except ImportError:
 
 class RouteOptimizer:
     AVG_SPEED_KMH = 65.0
-    COST_PER_KM = 1.35     # USD per km
-    CO2_PER_KM  = 1.02     # kg CO₂ per km (diesel truck, EU avg)
+    COST_PER_KM = 1.35  # USD per km
 
     def optimize(
         self,
@@ -55,7 +54,6 @@ class RouteOptimizer:
             'distance_saved_km': round(naive_stats['total_distance_km'] - opt_stats['total_distance_km'], 2),
             'time_saved_hours': round(naive_stats['total_time_hours'] - opt_stats['total_time_hours'], 2),
             'cost_saved_usd': round((naive_stats['total_distance_km'] - opt_stats['total_distance_km']) * self.COST_PER_KM, 2),
-            'co2_saved_kg': round((naive_stats['total_distance_km'] - opt_stats['total_distance_km']) * self.CO2_PER_KM, 2),
             'improvement_pct': round(
                 (naive_stats['total_distance_km'] - opt_stats['total_distance_km']) /
                 max(naive_stats['total_distance_km'], 1) * 100, 1
@@ -212,7 +210,6 @@ class RouteOptimizer:
             )
             total_dist += d
             breakdown.append({
-                'co2_kg': round(d * self.CO2_PER_KM, 2),
                 'vehicle_id': r['vehicle_id'],
                 'distance_km': round(d, 2),
                 'time_hours': round(d / self.AVG_SPEED_KMH, 2),
@@ -226,34 +223,6 @@ class RouteOptimizer:
             'vehicles_used': len(routes),
             'route_breakdown': breakdown,
         }
-
-    async def fetch_road_polyline(self, coordinates: list, api_key: str) -> list:
-        """
-        Fetch actual road polyline from OpenRouteService.
-        coordinates = [[lon, lat], [lon, lat], ...]
-        Returns list of [lat, lon] pairs for Leaflet.
-        """
-        if not api_key:
-            return []
-        try:
-            import httpx
-            url = "https://api.openrouteservice.org/v2/directions/driving-hcv/geojson"
-            headers = {
-                "Authorization": api_key,
-                "Content-Type": "application/json"
-            }
-            body = {"coordinates": coordinates}
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.post(url, json=body, headers=headers)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    coords = data["features"][0]["geometry"]["coordinates"]
-                    # ORS returns [lon, lat], Leaflet wants [lat, lon]
-                    return [[c[1], c[0]] for c in coords]
-        except Exception as e:
-            import logging
-            logging.getLogger(__name__).warning(f"ORS routing failed: {e}")
-        return []
 
     @staticmethod
     def _vehicle_color(v: int) -> str:

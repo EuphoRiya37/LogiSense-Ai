@@ -84,30 +84,6 @@ def get_weather_for_region(region: str) -> dict:
         "source": "simulated",
     }
 
-def get_weather_eta_adjustment(condition: str, wind_kph: float) -> dict:
-    delay_days = WEATHER_DELAY_MAP.get(condition, 0.0) * 3.0  # scale to days
-    if wind_kph > 60:
-        delay_days += 0.8
-        wind_note = f", wind {wind_kph:.0f} km/h"
-    elif wind_kph > 40:
-        delay_days += 0.3
-        wind_note = f", wind {wind_kph:.0f} km/h"
-    else:
-        wind_note = ""
-
-    delay_days = round(delay_days, 2)
-    if delay_days > 0.1:
-        reason = f"ETA adjusted +{delay_days:.1f}d due to {condition.lower()}{wind_note}"
-    else:
-        reason = None
-
-    return {
-        "weather_delay_days": delay_days,
-        "weather_condition": condition,
-        "weather_reason": reason,
-        "icon": _condition_icon(condition),
-    }
-
 
 def _condition_icon(condition: str) -> str:
     icons = {
@@ -121,3 +97,33 @@ def _condition_icon(condition: str) -> str:
 def get_global_weather_snapshot() -> list:
     """Returns weather for all major regions (simulated). Used on dashboard."""
     return [get_weather_for_region(r) for r in REGIONAL_WEATHER_SIM.keys()]
+
+def get_weather_eta_adjustment(condition: str, wind_kph: float) -> dict:
+    """
+    Returns ETA delay days and a human-readable reason string.
+    Used by /api/predict/full to adjust ML baseline.
+    """
+    delay_days = WEATHER_DELAY_MAP.get(condition, 0.0) * 3.0
+
+    if wind_kph > 60:
+        delay_days += 0.8
+        wind_note = f", wind {wind_kph:.0f} km/h"
+    elif wind_kph > 40:
+        delay_days += 0.3
+        wind_note = f", wind {wind_kph:.0f} km/h"
+    else:
+        wind_note = ""
+
+    delay_days = round(delay_days, 2)
+
+    if delay_days > 0.1:
+        reason = f"ETA adjusted +{delay_days:.1f}d due to {condition.lower()}{wind_note}"
+    else:
+        reason = None
+
+    return {
+        "weather_delay_days": delay_days,
+        "weather_condition": condition,
+        "weather_reason": reason,
+        "icon": _condition_icon(condition),
+    }

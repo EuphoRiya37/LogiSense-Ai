@@ -17,9 +17,7 @@ backend/data/*.csv
 
 # Environment
 .env
-.env.*
-*.env
-*.env.*
+*.env.local
 
 # Node
 node_modules/
