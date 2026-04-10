@@ -10,3 +10,4 @@ scikit-learn
 uvicorn[standard]
 websockets
 xgboost
+ 
